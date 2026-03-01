@@ -433,6 +433,7 @@ def render_single_results(
     results: Dict[str, Any],
     resume_pdf_bytes: bytes | None,
     jd_pdf_bytes: bytes | None,
+    simple_mode: bool = False,
 ) -> None:
     score = results["score_details"]
     skills = results["skill_details"]
@@ -467,6 +468,67 @@ def render_single_results(
         f"Model Used: `{language.get('effective_model', 'n/a')}`; "
         f"Role Template: **{results.get('role_template', 'General')}**"
     )
+
+    if simple_mode:
+        tabs = st.tabs(["Summary", "Skills Gap", "Suggestions"])
+
+        with tabs[0]:
+            st.markdown("#### Strong Points")
+            for point in strong_points:
+                st.markdown(f"- {point}")
+            st.markdown("#### Score Breakdown")
+            b1, b2, b3 = st.columns(3)
+            b1.metric("Semantic", f"{score['semantic']}%")
+            b2.metric("Lexical", f"{score['lexical']}%")
+            b3.metric("Confidence", f"{confidence['confidence_pct']}%")
+
+        with tabs[1]:
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("#### Matching Skills")
+                render_skill_pills(format_skill_list(skills["matching_skills"]))
+            with c2:
+                st.markdown("#### Missing Skills")
+                render_skill_pills(format_skill_list(skills["missing_skills"]))
+            st.markdown("#### ATS Tips")
+            for tip in ats["tips"][:4]:
+                st.markdown(f"- {tip}")
+
+        with tabs[2]:
+            st.markdown("#### Personalized Suggestions")
+            st.caption(f"Suggestion source: `{suggestions_payload.get('provider', 'unknown')}`")
+            for idx, suggestion in enumerate(suggestions or ["No suggestions generated in this mode."], start=1):
+                st.markdown(f"{idx}. {suggestion}")
+
+            report_md = build_suggestions_markdown(
+                match_score=score["overall"],
+                matching_skills=format_skill_list(skills["matching_skills"]),
+                missing_skills=format_skill_list(skills["missing_skills"]),
+                strong_points=strong_points,
+                suggestions=suggestions or ["Use the planner to close top skill gaps."],
+                ats_score=ats["ats_score"],
+            )
+            report_pdf = markdown_to_pdf_bytes(report_md)
+
+            d1, d2 = st.columns(2)
+            with d1:
+                st.download_button(
+                    "Download Suggestions (PDF)",
+                    data=report_pdf,
+                    file_name="improvement_report.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            with d2:
+                st.download_button(
+                    "Download Tailored Draft (Markdown)",
+                    data=tailored_draft,
+                    file_name="tailored_resume_draft.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+
+        return
 
     tabs = st.tabs(
         [
@@ -760,9 +822,12 @@ def main() -> None:
     llm_model_name = LLM_MODEL_OPTIONS[0]
     secret_groq_key = safe_get_secret("GROQ_API_KEY")
     groq_api_key = secret_groq_key
+    simple_mode = True
 
     with st.sidebar:
         st.subheader("Quick Setup")
+        ui_mode = st.radio("Experience", ["Simple (Recommended)", "Advanced"], index=0)
+        simple_mode = ui_mode == "Simple (Recommended)"
         analysis_mode = st.radio("Mode", ["Single Resume", "Batch Screening"], index=0)
 
         source_options = ["Live Upload/Paste", "Use Built-in Sample"]
@@ -796,21 +861,29 @@ def main() -> None:
             else:
                 jd_upload = st.file_uploader("Upload JD (PDF or TXT)", type=["pdf", "txt"])
 
-        with st.expander("LLM Suggestions", expanded=True):
+        if simple_mode:
+            st.markdown("### Suggestions")
             llm_mode = st.radio("Suggestion Engine", ["Auto (Groq if key)", "Rule-based only"], index=0)
-            llm_model_name = st.selectbox("Groq Model", LLM_MODEL_OPTIONS, index=0)
             groq_api_key_input = st.text_input("Groq API Key (Optional)", value="", type="password")
             groq_api_key = groq_api_key_input.strip() or secret_groq_key
             if llm_mode == "Rule-based only":
                 groq_api_key = ""
+        else:
+            with st.expander("LLM Suggestions", expanded=True):
+                llm_mode = st.radio("Suggestion Engine", ["Auto (Groq if key)", "Rule-based only"], index=0)
+                llm_model_name = st.selectbox("Groq Model", LLM_MODEL_OPTIONS, index=0)
+                groq_api_key_input = st.text_input("Groq API Key (Optional)", value="", type="password")
+                groq_api_key = groq_api_key_input.strip() or secret_groq_key
+                if llm_mode == "Rule-based only":
+                    groq_api_key = ""
 
-        with st.expander("Advanced Settings", expanded=False):
-            base_model_name = st.selectbox("Embedding Model", MODEL_OPTIONS, index=0)
-            auto_multilingual = st.checkbox("Auto Multilingual Routing", value=True)
-            use_reranker = st.checkbox("Enable Cross-Encoder Reranker", value=True)
-            reranker_model = st.text_input("Reranker Model", value=DEFAULT_RERANKER_MODEL)
-            use_ocr_fallback = st.checkbox("OCR Fallback for Scanned PDFs", value=True)
-            redact_enabled = st.checkbox("Redact PII Before Analysis", value=False)
+            with st.expander("Advanced Settings", expanded=False):
+                base_model_name = st.selectbox("Embedding Model", MODEL_OPTIONS, index=0)
+                auto_multilingual = st.checkbox("Auto Multilingual Routing", value=True)
+                use_reranker = st.checkbox("Enable Cross-Encoder Reranker", value=True)
+                reranker_model = st.text_input("Reranker Model", value=DEFAULT_RERANKER_MODEL)
+                use_ocr_fallback = st.checkbox("OCR Fallback for Scanned PDFs", value=True)
+                redact_enabled = st.checkbox("Redact PII Before Analysis", value=False)
 
     if st.session_state.use_sample:
         action_label = "Run Sample Analysis" if analysis_mode == "Single Resume" else "Run Sample Batch Screening"
@@ -993,9 +1066,10 @@ def main() -> None:
                     st.session_state.analysis_results,
                     st.session_state.get("resume_pdf_bytes"),
                     st.session_state.get("jd_pdf_bytes"),
+                    simple_mode=simple_mode,
                 )
                 privacy_summary = st.session_state.privacy_summary or {}
-                if privacy_summary:
+                if privacy_summary and not simple_mode:
                     st.markdown("#### Privacy Summary")
                     st.json(privacy_summary)
         else:
