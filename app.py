@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import json
 import textwrap
-from copy import deepcopy
 from datetime import datetime
 from typing import Any, Dict, List, Sequence
 
@@ -18,14 +17,6 @@ from reportlab.pdfgen import canvas
 from utils.confidence import compute_confidence
 from utils.extractor import extract_document, extract_text_from_input
 from utils.fairness import analyze_bias_risks
-from utils.history import (
-    authenticate_user,
-    get_history_record,
-    init_db,
-    list_history,
-    register_user,
-    save_analysis,
-)
 from utils.llm_suggestions import build_suggestions_markdown, generate_improvement_suggestions
 from utils.matcher import (
     DEFAULT_RERANKER_MODEL,
@@ -438,42 +429,10 @@ def run_batch_analysis(
     progress.progress(100, text="Batch analysis complete.")
     return rows
 
-def render_history_compare_panel(logged_user: str | None) -> None:
-    if not logged_user:
-        st.info("Log in to enable account-backed analysis history and version comparison.")
-        return
-    history_rows = list_history(logged_user, limit=40)
-    if not history_rows:
-        st.caption("No saved history yet.")
-        return
-
-    history_df = pd.DataFrame(history_rows)
-    st.dataframe(history_df, use_container_width=True, hide_index=True)
-
-    ids = history_df["id"].tolist()
-    if len(ids) >= 2:
-        c1, c2 = st.columns(2)
-        id_a = c1.selectbox("Baseline Record", ids, key="cmp_a")
-        id_b = c2.selectbox("Compare Record", ids, index=1 if len(ids) > 1 else 0, key="cmp_b")
-        if id_a != id_b:
-            rec_a = get_history_record(int(id_a))
-            rec_b = get_history_record(int(id_b))
-            if rec_a and rec_b:
-                old_score = float(rec_a.get("score_details", {}).get("overall", 0))
-                new_score = float(rec_b.get("score_details", {}).get("overall", 0))
-                old_ats = float(rec_a.get("ats_details", {}).get("ats_score", 0))
-                new_ats = float(rec_b.get("ats_details", {}).get("ats_score", 0))
-                st.markdown("#### Version Comparison")
-                diff_c1, diff_c2 = st.columns(2)
-                diff_c1.metric("Overall Match Delta", f"{new_score - old_score:+.2f}")
-                diff_c2.metric("ATS Score Delta", f"{new_ats - old_ats:+.2f}")
-
-
 def render_single_results(
     results: Dict[str, Any],
     resume_pdf_bytes: bytes | None,
     jd_pdf_bytes: bytes | None,
-    logged_user: str | None,
 ) -> None:
     score = results["score_details"]
     skills = results["skill_details"]
@@ -519,7 +478,6 @@ def render_single_results(
             "Action Plan + Tailored Draft",
             "Explainability + Fairness",
             "PDF + Highlights",
-            "History",
             "Observability",
         ]
     )
@@ -695,9 +653,6 @@ def render_single_results(
             st.caption("No JD snippet found for selected keyword.")
 
     with tabs[8]:
-        render_history_compare_panel(logged_user)
-
-    with tabs[9]:
         st.markdown("#### Latency Metrics")
         timing_df = pd.DataFrame(observability.get("stage_timings", []))
         if not timing_df.empty:
@@ -758,40 +713,6 @@ def render_batch_results(batch_rows: Sequence[Dict[str, Any]]) -> None:
         )
 
 
-def _render_account_ui() -> str | None:
-    logged_user = st.session_state.get("logged_user")
-    st.markdown("### Account")
-    if logged_user:
-        st.success(f"Logged in as `{logged_user}`")
-        if st.button("Logout", use_container_width=True):
-            st.session_state.logged_user = None
-            st.rerun()
-        return logged_user
-
-    login_tab, register_tab = st.tabs(["Login", "Register"])
-    with login_tab:
-        username = st.text_input("Username", key="login_user")
-        password = st.text_input("Password", type="password", key="login_pwd")
-        if st.button("Login", key="login_btn", use_container_width=True):
-            if authenticate_user(username.strip(), password):
-                st.session_state.logged_user = username.strip()
-                st.success("Login successful.")
-                st.rerun()
-            else:
-                st.error("Invalid username or password.")
-    with register_tab:
-        new_user = st.text_input("New Username", key="reg_user")
-        new_pwd = st.text_input("New Password", type="password", key="reg_pwd")
-        if st.button("Create Account", key="reg_btn", use_container_width=True):
-            if not new_user.strip() or len(new_pwd) < 4:
-                st.error("Provide a valid username and password (min 4 chars).")
-            elif register_user(new_user.strip(), new_pwd):
-                st.success("Account created. Please login.")
-            else:
-                st.error("Username already exists.")
-
-    return st.session_state.get("logged_user")
-
 def main() -> None:
     st.set_page_config(
         page_title="AI Resume Screener & Job Matcher",
@@ -799,14 +720,12 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
     inject_custom_css()
-    init_db()
 
     defaults = {
         "use_sample": False,
         "analysis_results": None,
         "batch_results": None,
         "privacy_summary": {},
-        "logged_user": None,
         "resume_pdf_bytes": None,
         "jd_pdf_bytes": None,
     }
@@ -820,7 +739,7 @@ def main() -> None:
             <h2 style="margin:0;">AI Resume Screener & Job Matcher</h2>
             <p style="margin:0.35rem 0 0 0;">
                 Hybrid AI matching with role templates, section scoring, requirement evidence mapping, rewrite diff,
-                30-day action plans, tailored resume drafts, fairness checks, multilingual support, and account history.
+                30-day action plans, tailored resume drafts, fairness checks, and multilingual support.
             </p>
         </div>
         """,
@@ -829,8 +748,6 @@ def main() -> None:
 
     with st.sidebar:
         st.subheader("Configuration")
-        with st.expander("User Account & History", expanded=False):
-            _render_account_ui()
 
         analysis_mode = st.radio("Mode", ["Single Resume", "Batch Screening"], index=0)
         role_template_name = st.selectbox("Role Template", get_role_template_names(), index=0)
@@ -842,7 +759,6 @@ def main() -> None:
         reranker_model = st.text_input("Reranker Model", value=DEFAULT_RERANKER_MODEL)
         use_ocr_fallback = st.checkbox("OCR Fallback for Scanned PDFs", value=True)
         redact_enabled = st.checkbox("Redact PII Before Analysis", value=False)
-        no_data_retention = st.checkbox("Do Not Save Raw Text to History", value=True)
 
         st.markdown("### LLM Suggestions")
         llm_mode = st.radio("Suggestion Engine", ["Auto (Groq if key)", "Rule-based only"], index=0)
@@ -967,14 +883,6 @@ def main() -> None:
                     st.session_state.privacy_summary = analysis["privacy"]
                     st.session_state.resume_pdf_bytes = resume_pdf_bytes
 
-                    logged_user = st.session_state.get("logged_user")
-                    if logged_user:
-                        payload_to_store = deepcopy(analysis)
-                        if no_data_retention:
-                            payload_to_store["resume_text"] = ""
-                            payload_to_store["jd_text"] = ""
-                        save_analysis(logged_user, role_template_name, payload_to_store)
-
                     st.success("Single resume analysis complete.")
                 except Exception as exc:
                     st.session_state.analysis_results = None
@@ -1041,7 +949,6 @@ def main() -> None:
                     st.session_state.analysis_results,
                     st.session_state.get("resume_pdf_bytes"),
                     st.session_state.get("jd_pdf_bytes"),
-                    st.session_state.get("logged_user"),
                 )
                 privacy_summary = st.session_state.privacy_summary or {}
                 if privacy_summary:
