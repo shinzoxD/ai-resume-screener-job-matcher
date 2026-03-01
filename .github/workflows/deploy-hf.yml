@@ -51,31 +51,60 @@ jobs:
       - name: Sync repository to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE_REPO: ${{ steps.normalize.outputs.space_repo }}
         run: |
           set -e
-          git config --global user.email "github-actions@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git config --global http.https://huggingface.co/.extraheader "Authorization: Bearer ${HF_TOKEN}"
+          python -m pip install --upgrade pip
+          pip install huggingface_hub
 
-          git clone "https://huggingface.co/spaces/${{ steps.normalize.outputs.space_repo }}" hf_space
+          python - <<'PY'
+          import os
+          import shutil
+          import tempfile
+          from pathlib import Path
+          from huggingface_hub import HfApi
 
-          rsync -av --delete \
-            --exclude ".git" \
-            --exclude ".github" \
-            --exclude ".venv" \
-            --exclude "__pycache__" \
-            --exclude ".pytest_cache" \
-            --exclude ".mypy_cache" \
-            --exclude ".ruff_cache" \
-            --exclude ".hf" \
-            --exclude "hf_space" \
-            --exclude "tests" \
-            --exclude "artifacts" \
-            ./ hf_space/
+          token = os.environ["HF_TOKEN"]
+          repo_id = os.environ["SPACE_REPO"]
+          workspace = Path(".").resolve()
+          deploy_dir = Path(tempfile.mkdtemp(prefix="hf_deploy_bundle_"))
 
-          cp .hf/README.md hf_space/README.md
+          ignore_names = {
+              ".git",
+              ".github",
+              ".venv",
+              "__pycache__",
+              ".pytest_cache",
+              ".mypy_cache",
+              ".ruff_cache",
+              ".hf",
+              "tests",
+              "artifacts",
+              "data/app_history.db",
+          }
 
-          cd hf_space
-          git add .
-          git commit -m "Deploy from GitHub: ${GITHUB_SHA}" || echo "No changes to commit"
-          git push
+          def _ignore(path, names):
+              return [name for name in names if name in ignore_names]
+
+          shutil.copytree(workspace, deploy_dir, ignore=_ignore)
+
+          hf_readme = workspace / ".hf" / "README.md"
+          if hf_readme.exists():
+              shutil.copyfile(hf_readme, deploy_dir / "README.md")
+
+          api = HfApi(token=token)
+          api.create_repo(
+              repo_id=repo_id,
+              repo_type="space",
+              space_sdk="docker",
+              exist_ok=True,
+          )
+          api.upload_folder(
+              repo_id=repo_id,
+              repo_type="space",
+              folder_path=str(deploy_dir),
+              commit_message=f"Deploy from GitHub: {os.environ.get('GITHUB_SHA', 'manual')}",
+          )
+          print(f"Deployed successfully to https://huggingface.co/spaces/{repo_id}")
+          shutil.rmtree(deploy_dir, ignore_errors=True)
+          PY
