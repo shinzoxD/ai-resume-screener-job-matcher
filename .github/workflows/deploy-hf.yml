@@ -114,6 +114,7 @@ jobs:
         run: |
           python - <<'PY'
           import os
+          import subprocess
           import shutil
           from pathlib import Path
 
@@ -121,30 +122,34 @@ jobs:
           bundle_dir = Path(os.environ["BUNDLE_DIR"])
           if bundle_dir.exists():
             shutil.rmtree(bundle_dir, ignore_errors=True)
+          bundle_dir.mkdir(parents=True, exist_ok=True)
 
-          ignore_names = {
-            ".git",
-            ".github",
-            ".venv",
-            "__pycache__",
-            ".pytest_cache",
-            ".mypy_cache",
-            ".ruff_cache",
-            ".hf",
-            "tests",
-            "artifacts",
-          }
+          tracked_files = subprocess.check_output(
+            ["git", "ls-files"], text=True, cwd=str(workspace)
+          ).splitlines()
+          exclude_prefixes = (".github/", ".hf/", "tests/", "artifacts/")
+          exclude_exact = {"data/app_history.db"}
 
-          def _ignore(path, names):
-            return [name for name in names if name in ignore_names]
-
-          shutil.copytree(workspace, bundle_dir, ignore=_ignore)
+          copied = 0
+          for rel in tracked_files:
+            rel_path = rel.replace("\\", "/")
+            if rel_path in exclude_exact:
+              continue
+            if any(rel_path.startswith(prefix) for prefix in exclude_prefixes):
+              continue
+            src = workspace / rel_path
+            if not src.is_file():
+              continue
+            dst = bundle_dir / rel_path
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            copied += 1
 
           hf_readme = workspace / ".hf" / "README.md"
           if hf_readme.exists():
             shutil.copyfile(hf_readme, bundle_dir / "README.md")
 
-          print(f"Bundle prepared at: {bundle_dir}")
+          print(f"Bundle prepared at: {bundle_dir} (files copied: {copied})")
           PY
 
       - name: Upload repository to Hugging Face Space
@@ -156,17 +161,33 @@ jobs:
           python - <<'PY'
           import os
           from huggingface_hub import HfApi
+          from huggingface_hub.utils import HfHubHTTPError
 
           token = os.environ["HF_TOKEN"].strip()
           repo_id = os.environ["SPACE_REPO"].strip()
           folder_path = os.environ["BUNDLE_DIR"]
 
-          api = HfApi(token=token)
-          api.upload_folder(
-            repo_id=repo_id,
-            repo_type="space",
-            folder_path=folder_path,
-            commit_message=f"Deploy from GitHub: {os.environ.get('GITHUB_SHA', 'manual')}",
-          )
-          print(f"Deployed successfully to https://huggingface.co/spaces/{repo_id}")
+          try:
+            api = HfApi(token=token)
+            api.upload_folder(
+              repo_id=repo_id,
+              repo_type="space",
+              folder_path=folder_path,
+              commit_message=f"Deploy from GitHub: {os.environ.get('GITHUB_SHA', 'manual')}",
+            )
+            print(f"Deployed successfully to https://huggingface.co/spaces/{repo_id}")
+          except HfHubHTTPError as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", "unknown")
+            body = getattr(getattr(exc, "response", None), "text", "") or ""
+            body = body[:500].replace("\n", " ").replace("\r", " ")
+            msg = (
+              f"HF upload failed for {repo_id}. status={status}. "
+              f"error={type(exc).__name__}: {exc}. response={body}"
+            )
+            print(f"::error title=Hugging Face upload failed::{msg}")
+            raise
+          except Exception as exc:
+            msg = f"HF upload failed for {repo_id}. error={type(exc).__name__}: {exc}"
+            print(f"::error title=Hugging Face upload failed::{msg}")
+            raise
           PY
