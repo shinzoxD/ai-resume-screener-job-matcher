@@ -55,8 +55,8 @@ jobs:
           set -e
           git config --global user.email "github-actions@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+          git config --global http.https://huggingface.co/.extraheader "Authorization: Bearer ${HF_TOKEN}"
 
-          # Clone publicly first to avoid auth-format edge cases in pre-checks.
           git clone "https://huggingface.co/spaces/${{ steps.normalize.outputs.space_repo }}" hf_space
 
           rsync -av --delete \
@@ -76,7 +76,6 @@ jobs:
           cp .hf/README.md hf_space/README.md
 
           cd hf_space
-          git remote set-url origin "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${{ steps.normalize.outputs.space_repo }}"
           git add .
           git commit -m "Deploy from GitHub: ${GITHUB_SHA}" || echo "No changes to commit"
           git push
