@@ -53,67 +53,120 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Sync repository to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          SPACE_REPO: ${{ steps.normalize.outputs.space_repo }}
+      - name: Install deployment dependencies
         run: |
-          set -e
           python --version
           python -m pip --version
           python -m pip install --upgrade pip
           pip install "huggingface_hub>=0.24.0"
 
+      - name: Validate Hugging Face token
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          token = os.environ["HF_TOKEN"].strip()
+          api = HfApi(token=token)
+          who = api.whoami(token=token)
+          print(f"Authenticated as: {who.get('name', 'unknown')}")
+          PY
+
+      - name: Ensure target Space exists
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE_REPO: ${{ steps.normalize.outputs.space_repo }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          from huggingface_hub.utils import HfHubHTTPError
+
+          token = os.environ["HF_TOKEN"].strip()
+          repo_id = os.environ["SPACE_REPO"].strip()
+          api = HfApi(token=token)
+
+          try:
+            info = api.repo_info(repo_id=repo_id, repo_type="space")
+            print(f"Target Space confirmed: {info.id}")
+          except HfHubHTTPError as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status == 404:
+              print(f"Space not found. Creating: {repo_id}")
+              info = api.create_repo(
+                repo_id=repo_id,
+                repo_type="space",
+                space_sdk="docker",
+                private=False,
+                exist_ok=True,
+                token=token,
+              )
+              print(f"Created Space: {info.repo_id}")
+            else:
+              raise
+          PY
+
+      - name: Prepare deploy bundle
+        env:
+          BUNDLE_DIR: ${{ runner.temp }}/hf_space_bundle
+        run: |
           python - <<'PY'
           import os
           import shutil
-          import tempfile
           from pathlib import Path
-          from huggingface_hub import HfApi
 
-          token = os.environ["HF_TOKEN"]
-          repo_id = os.environ["SPACE_REPO"]
           workspace = Path(".").resolve()
-          tmp_root = Path(tempfile.mkdtemp(prefix="hf_deploy_bundle_"))
-          deploy_dir = tmp_root / "bundle"
+          bundle_dir = Path(os.environ["BUNDLE_DIR"])
+          if bundle_dir.exists():
+            shutil.rmtree(bundle_dir, ignore_errors=True)
 
           ignore_names = {
-              ".git",
-              ".github",
-              ".venv",
-              "__pycache__",
-              ".pytest_cache",
-              ".mypy_cache",
-              ".ruff_cache",
-              ".hf",
-              "tests",
-              "artifacts",
+            ".git",
+            ".github",
+            ".venv",
+            "__pycache__",
+            ".pytest_cache",
+            ".mypy_cache",
+            ".ruff_cache",
+            ".hf",
+            "tests",
+            "artifacts",
           }
 
           def _ignore(path, names):
-              return [name for name in names if name in ignore_names]
+            return [name for name in names if name in ignore_names]
 
-          shutil.copytree(workspace, deploy_dir, ignore=_ignore)
+          shutil.copytree(workspace, bundle_dir, ignore=_ignore)
 
           hf_readme = workspace / ".hf" / "README.md"
           if hf_readme.exists():
-              shutil.copyfile(hf_readme, deploy_dir / "README.md")
+            shutil.copyfile(hf_readme, bundle_dir / "README.md")
 
-          try:
-              api = HfApi(token=token)
-              # Verify token and repo access before upload.
-              who = api.whoami(token=token)
-              print(f"Authenticated as: {who.get('name', 'unknown')}")
-              info = api.repo_info(repo_id=repo_id, repo_type="space")
-              print(f"Target Space confirmed: {info.id}")
+          print(f"Bundle prepared at: {bundle_dir}")
+          PY
 
-              api.upload_folder(
-                  repo_id=repo_id,
-                  repo_type="space",
-                  folder_path=str(deploy_dir),
-                  commit_message=f"Deploy from GitHub: {os.environ.get('GITHUB_SHA', 'manual')}",
-              )
-              print(f"Deployed successfully to https://huggingface.co/spaces/{repo_id}")
-          finally:
-              shutil.rmtree(tmp_root, ignore_errors=True)
+      - name: Upload repository to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE_REPO: ${{ steps.normalize.outputs.space_repo }}
+          BUNDLE_DIR: ${{ runner.temp }}/hf_space_bundle
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          token = os.environ["HF_TOKEN"].strip()
+          repo_id = os.environ["SPACE_REPO"].strip()
+          folder_path = os.environ["BUNDLE_DIR"]
+
+          api = HfApi(token=token)
+          api.upload_folder(
+            repo_id=repo_id,
+            repo_type="space",
+            folder_path=folder_path,
+            commit_message=f"Deploy from GitHub: {os.environ.get('GITHUB_SHA', 'manual')}",
+          )
+          print(f"Deployed successfully to https://huggingface.co/spaces/{repo_id}")
           PY
