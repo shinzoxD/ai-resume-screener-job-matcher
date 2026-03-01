@@ -215,7 +215,7 @@ This repo includes `.github/workflows/deploy-hf.yml` for automatic Space deploym
 2. `HF_SPACE_REPO`: Hugging Face Space repo in `username/space-name` format
 
 ### Setup Steps
-1. Create a Hugging Face Space (SDK: Streamlit).
+1. Create a Hugging Face Space (SDK: Docker).
 2. In GitHub repo settings, add the two secrets above.
 3. Push to `main` (or run workflow manually via `workflow_dispatch`).
 4. Workflow runs tests, syncs files, and pushes to the Space repo.

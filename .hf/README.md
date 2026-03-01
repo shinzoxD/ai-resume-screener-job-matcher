@@ -3,9 +3,8 @@ title: AI Resume Screener & Job Matcher
 emoji: 📄
 colorFrom: emerald
 colorTo: blue
-sdk: streamlit
-sdk_version: 1.54.0
-app_file: app.py
+sdk: docker
+app_port: 8501
 pinned: false
 ---
 
@@ -22,4 +21,4 @@ This Space is auto-deployed from GitHub via GitHub Actions.
 
 ## Notes
 - Configure `GROQ_API_KEY` in Space Secrets if you want LLM suggestions.
-- This Streamlit Space runs the web app (`app.py`).
+- This app runs as a Docker Space and serves Streamlit on port `8501`.
