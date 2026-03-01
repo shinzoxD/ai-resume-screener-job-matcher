@@ -48,22 +48,16 @@ jobs:
           echo "space_repo=${SPACE_REPO}" >> "$GITHUB_OUTPUT"
           echo "Normalized deploy target: ${SPACE_REPO}"
 
-      # CI already runs tests in a separate workflow; deployment should remain fast and deterministic.
-      - name: Verify Hugging Face Space access
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          git ls-remote "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${{ steps.normalize.outputs.space_repo }}" >/dev/null \
-          || (echo "Cannot access Space repo. Check HF_TOKEN scope and HF_SPACE_REPO value." && exit 1)
-
       - name: Sync repository to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -e
           git config --global user.email "github-actions@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
 
-          git clone "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${{ steps.normalize.outputs.space_repo }}" hf_space
+          # Clone publicly first to avoid auth-format edge cases in pre-checks.
+          git clone "https://huggingface.co/spaces/${{ steps.normalize.outputs.space_repo }}" hf_space
 
           rsync -av --delete \
             --exclude ".git" \
@@ -82,6 +76,7 @@ jobs:
           cp .hf/README.md hf_space/README.md
 
           cd hf_space
+          git remote set-url origin "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${{ steps.normalize.outputs.space_repo }}"
           git add .
           git commit -m "Deploy from GitHub: ${GITHUB_SHA}" || echo "No changes to commit"
           git push
