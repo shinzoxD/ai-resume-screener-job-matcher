@@ -48,14 +48,21 @@ jobs:
           echo "space_repo=${SPACE_REPO}" >> "$GITHUB_OUTPUT"
           echo "Normalized deploy target: ${SPACE_REPO}"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Sync repository to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           SPACE_REPO: ${{ steps.normalize.outputs.space_repo }}
         run: |
           set -e
+          python --version
+          python -m pip --version
           python -m pip install --upgrade pip
-          pip install huggingface_hub
+          pip install "huggingface_hub>=0.24.0"
 
           python - <<'PY'
           import os
@@ -92,19 +99,21 @@ jobs:
           if hf_readme.exists():
               shutil.copyfile(hf_readme, deploy_dir / "README.md")
 
-          api = HfApi(token=token)
-          api.create_repo(
-              repo_id=repo_id,
-              repo_type="space",
-              space_sdk="docker",
-              exist_ok=True,
-          )
-          api.upload_folder(
-              repo_id=repo_id,
-              repo_type="space",
-              folder_path=str(deploy_dir),
-              commit_message=f"Deploy from GitHub: {os.environ.get('GITHUB_SHA', 'manual')}",
-          )
-          print(f"Deployed successfully to https://huggingface.co/spaces/{repo_id}")
-          shutil.rmtree(deploy_dir, ignore_errors=True)
+          try:
+              api = HfApi(token=token)
+              # Verify token and repo access before upload.
+              who = api.whoami(token=token)
+              print(f"Authenticated as: {who.get('name', 'unknown')}")
+              info = api.repo_info(repo_id=repo_id, repo_type="space")
+              print(f"Target Space confirmed: {info.id}")
+
+              api.upload_folder(
+                  repo_id=repo_id,
+                  repo_type="space",
+                  folder_path=str(deploy_dir),
+                  commit_message=f"Deploy from GitHub: {os.environ.get('GITHUB_SHA', 'manual')}",
+              )
+              print(f"Deployed successfully to https://huggingface.co/spaces/{repo_id}")
+          finally:
+              shutil.rmtree(deploy_dir, ignore_errors=True)
           PY
