@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import textwrap
 from datetime import datetime
 from typing import Any, Dict, List, Sequence
@@ -135,9 +136,12 @@ def inject_custom_css() -> None:
 
 def safe_get_secret(key: str) -> str:
     try:
-        return str(st.secrets.get(key, "")).strip()
+        value = str(st.secrets.get(key, "")).strip()
+        if value:
+            return value
     except Exception:
-        return ""
+        pass
+    return str(os.getenv(key, "")).strip()
 
 
 def render_skill_pills(skills: Sequence[str]) -> None:
