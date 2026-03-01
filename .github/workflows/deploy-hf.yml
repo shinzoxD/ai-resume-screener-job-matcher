@@ -74,6 +74,7 @@ jobs:
             --exclude ".mypy_cache" \
             --exclude ".ruff_cache" \
             --exclude ".hf" \
+            --exclude "hf_space" \
             --exclude "tests" \
             --exclude "artifacts" \
             ./ hf_space/
