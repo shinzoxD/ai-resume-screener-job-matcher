@@ -812,34 +812,6 @@ def main() -> None:
             use_ocr_fallback = st.checkbox("OCR Fallback for Scanned PDFs", value=True)
             redact_enabled = st.checkbox("Redact PII Before Analysis", value=False)
 
-    input_tab, results_tab = st.tabs(["Input Preview", "Analysis Results"])
-
-    with input_tab:
-        if st.session_state.use_sample:
-            st.info("Sample mode active.")
-            if analysis_mode == "Single Resume":
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.text_area("Sample Resume", SAMPLE_RESUME_TEXT, height=320, disabled=True)
-                with c2:
-                    st.text_area("Sample JD", SAMPLE_JD_TEXT, height=320, disabled=True)
-            else:
-                st.markdown("Using two built-in sample resumes against sample JD in batch mode.")
-        else:
-            resume_ready = bool(resume_pdf) if analysis_mode == "Single Resume" else bool(resume_pdfs)
-            jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
-
-            c1, c2 = st.columns(2)
-            with c1:
-                st.metric("Resume Input", "Ready" if resume_ready else "Missing")
-            with c2:
-                st.metric("JD Input", "Ready" if jd_ready else "Missing")
-
-            if not resume_ready or not jd_ready:
-                st.warning("Upload resume and provide a full job description before running analysis.")
-            else:
-                st.success("Inputs look good. Click analyze.")
-
     if st.session_state.use_sample:
         action_label = "Run Sample Analysis" if analysis_mode == "Single Resume" else "Run Sample Batch Screening"
     else:
@@ -972,6 +944,45 @@ def main() -> None:
             except Exception as exc:
                 st.session_state.batch_results = None
                 st.exception(exc)
+
+    has_output = (
+        st.session_state.analysis_results is not None
+        if analysis_mode == "Single Resume"
+        else bool(st.session_state.batch_results)
+    )
+    if has_output:
+        results_tab, input_tab = st.tabs(["Analysis Results", "Input Preview"])
+    else:
+        input_tab, results_tab = st.tabs(["Input Preview", "Analysis Results"])
+
+    with input_tab:
+        if has_output:
+            st.info("Latest results are ready in the Analysis Results tab.")
+
+        if st.session_state.use_sample:
+            st.info("Sample mode active.")
+            if analysis_mode == "Single Resume":
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.text_area("Sample Resume", SAMPLE_RESUME_TEXT, height=320, disabled=True)
+                with c2:
+                    st.text_area("Sample JD", SAMPLE_JD_TEXT, height=320, disabled=True)
+            else:
+                st.markdown("Using two built-in sample resumes against sample JD in batch mode.")
+        else:
+            resume_ready = bool(resume_pdf) if analysis_mode == "Single Resume" else bool(resume_pdfs)
+            jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.metric("Resume Input", "Ready" if resume_ready else "Missing")
+            with c2:
+                st.metric("JD Input", "Ready" if jd_ready else "Missing")
+
+            if not resume_ready or not jd_ready:
+                st.warning("Upload resume and provide a full job description before running analysis.")
+            else:
+                st.success("Inputs look good. Click analyze.")
 
     with results_tab:
         if analysis_mode == "Single Resume":
