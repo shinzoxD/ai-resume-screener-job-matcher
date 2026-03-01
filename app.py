@@ -746,57 +746,71 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    with st.sidebar:
-        st.subheader("Configuration")
+    resume_pdf = None
+    resume_pdfs = []
+    jd_mode = "Paste Text"
+    jd_upload = None
+    jd_pasted = ""
+    base_model_name = MODEL_OPTIONS[0]
+    auto_multilingual = True
+    use_reranker = True
+    reranker_model = DEFAULT_RERANKER_MODEL
+    use_ocr_fallback = True
+    redact_enabled = False
+    llm_model_name = LLM_MODEL_OPTIONS[0]
+    secret_groq_key = safe_get_secret("GROQ_API_KEY")
+    groq_api_key = secret_groq_key
 
+    with st.sidebar:
+        st.subheader("Quick Setup")
         analysis_mode = st.radio("Mode", ["Single Resume", "Batch Screening"], index=0)
+
+        source_options = ["Live Upload/Paste", "Use Built-in Sample"]
+        source_index = 1 if st.session_state.use_sample else 0
+        input_source = st.radio("Input Source", source_options, index=source_index)
+        st.session_state.use_sample = input_source == "Use Built-in Sample"
+
         role_template_name = st.selectbox("Role Template", get_role_template_names(), index=0)
         st.caption(get_role_template(role_template_name).get("description", ""))
 
-        base_model_name = st.selectbox("Embedding Model", MODEL_OPTIONS, index=0)
-        auto_multilingual = st.checkbox("Auto Multilingual Routing", value=True)
-        use_reranker = st.checkbox("Enable Cross-Encoder Reranker", value=True)
-        reranker_model = st.text_input("Reranker Model", value=DEFAULT_RERANKER_MODEL)
-        use_ocr_fallback = st.checkbox("OCR Fallback for Scanned PDFs", value=True)
-        redact_enabled = st.checkbox("Redact PII Before Analysis", value=False)
-
-        st.markdown("### LLM Suggestions")
-        llm_mode = st.radio("Suggestion Engine", ["Auto (Groq if key)", "Rule-based only"], index=0)
-        llm_model_name = st.selectbox("Groq Model", LLM_MODEL_OPTIONS, index=0)
-        secret_groq_key = safe_get_secret("GROQ_API_KEY")
-        groq_api_key_input = st.text_input("Groq API Key (Optional)", value="", type="password")
-        groq_api_key = groq_api_key_input.strip() or secret_groq_key
-        if llm_mode == "Rule-based only":
-            groq_api_key = ""
-
         st.markdown("### Inputs")
-        if analysis_mode == "Single Resume":
-            resume_pdf = st.file_uploader("Resume PDF", type=["pdf"], accept_multiple_files=False)
-            resume_pdfs = []
+        if st.session_state.use_sample:
+            st.info("Sample mode is ON. Built-in resume and JD will be used.")
+            st.caption("Switch Input Source to `Live Upload/Paste` to use your own files.")
         else:
-            resume_pdfs = st.file_uploader(
-                "Upload Resume PDFs",
-                type=["pdf"],
-                accept_multiple_files=True,
-                help="Batch mode ranks multiple candidates against one JD.",
-            )
-            resume_pdf = None
+            if analysis_mode == "Single Resume":
+                resume_pdf = st.file_uploader("Resume PDF", type=["pdf"], accept_multiple_files=False)
+                resume_pdfs = []
+            else:
+                resume_pdfs = st.file_uploader(
+                    "Upload Resume PDFs",
+                    type=["pdf"],
+                    accept_multiple_files=True,
+                    help="Batch mode ranks multiple candidates against one JD.",
+                )
+                resume_pdf = None
 
-        jd_mode = st.radio("Job Description Input", ["Paste Text", "Upload File"], index=0)
-        jd_upload = None
-        jd_pasted = ""
-        if jd_mode == "Paste Text":
-            jd_pasted = st.text_area("Paste Job Description", height=220)
-        else:
-            jd_upload = st.file_uploader("Upload JD (PDF or TXT)", type=["pdf", "txt"])
+            jd_mode = st.radio("Job Description Input", ["Paste Text", "Upload File"], index=0)
+            if jd_mode == "Paste Text":
+                jd_pasted = st.text_area("Paste Job Description", height=220)
+            else:
+                jd_upload = st.file_uploader("Upload JD (PDF or TXT)", type=["pdf", "txt"])
 
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button("Try with Sample", use_container_width=True):
-                st.session_state.use_sample = True
-        with b2:
-            if st.button("Clear Sample", use_container_width=True):
-                st.session_state.use_sample = False
+        with st.expander("LLM Suggestions", expanded=True):
+            llm_mode = st.radio("Suggestion Engine", ["Auto (Groq if key)", "Rule-based only"], index=0)
+            llm_model_name = st.selectbox("Groq Model", LLM_MODEL_OPTIONS, index=0)
+            groq_api_key_input = st.text_input("Groq API Key (Optional)", value="", type="password")
+            groq_api_key = groq_api_key_input.strip() or secret_groq_key
+            if llm_mode == "Rule-based only":
+                groq_api_key = ""
+
+        with st.expander("Advanced Settings", expanded=False):
+            base_model_name = st.selectbox("Embedding Model", MODEL_OPTIONS, index=0)
+            auto_multilingual = st.checkbox("Auto Multilingual Routing", value=True)
+            use_reranker = st.checkbox("Enable Cross-Encoder Reranker", value=True)
+            reranker_model = st.text_input("Reranker Model", value=DEFAULT_RERANKER_MODEL)
+            use_ocr_fallback = st.checkbox("OCR Fallback for Scanned PDFs", value=True)
+            redact_enabled = st.checkbox("Redact PII Before Analysis", value=False)
 
     input_tab, results_tab = st.tabs(["Input Preview", "Analysis Results"])
 
@@ -812,32 +826,51 @@ def main() -> None:
             else:
                 st.markdown("Using two built-in sample resumes against sample JD in batch mode.")
         else:
-            st.caption("Upload/paste inputs and run analysis.")
+            resume_ready = bool(resume_pdf) if analysis_mode == "Single Resume" else bool(resume_pdfs)
+            jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
 
-    action_label = "Analyze Resume Match" if analysis_mode == "Single Resume" else "Run Batch Screening"
+            c1, c2 = st.columns(2)
+            with c1:
+                st.metric("Resume Input", "Ready" if resume_ready else "Missing")
+            with c2:
+                st.metric("JD Input", "Ready" if jd_ready else "Missing")
+
+            if not resume_ready or not jd_ready:
+                st.warning("Upload resume and provide a full job description before running analysis.")
+            else:
+                st.success("Inputs look good. Click analyze.")
+
+    if st.session_state.use_sample:
+        action_label = "Run Sample Analysis" if analysis_mode == "Single Resume" else "Run Sample Batch Screening"
+    else:
+        action_label = "Analyze Resume Match" if analysis_mode == "Single Resume" else "Run Batch Screening"
     run_clicked = st.button(action_label, type="primary", use_container_width=True)
 
     if run_clicked:
         with st.spinner("Preparing inputs..."):
-            if jd_mode == "Upload File":
-                jd_text = (
-                    extract_text_from_input(jd_upload, use_ocr_fallback=use_ocr_fallback)
-                    if jd_upload is not None
-                    else (SAMPLE_JD_TEXT if st.session_state.use_sample else "")
-                )
+            if st.session_state.use_sample:
+                jd_text = SAMPLE_JD_TEXT
+                st.session_state.jd_pdf_bytes = None
             else:
-                jd_text = jd_pasted.strip() or (SAMPLE_JD_TEXT if st.session_state.use_sample else "")
+                if jd_mode == "Upload File":
+                    jd_text = (
+                        extract_text_from_input(jd_upload, use_ocr_fallback=use_ocr_fallback)
+                        if jd_upload is not None
+                        else ""
+                    )
+                else:
+                    jd_text = jd_pasted.strip()
+
+                st.session_state.jd_pdf_bytes = _extract_uploaded_bytes(jd_upload) if jd_upload else None
 
             jd_pii = {}
             if redact_enabled and jd_text:
                 jd_text, jd_pii = redact_pii(jd_text)
 
-            st.session_state.jd_pdf_bytes = _extract_uploaded_bytes(jd_upload) if jd_upload else None
-
         if not jd_text.strip():
             st.error("Job description is empty. Please provide a valid JD.")
         elif analysis_mode == "Single Resume":
-            if st.session_state.use_sample and resume_pdf is None:
+            if st.session_state.use_sample:
                 resume_text = SAMPLE_RESUME_TEXT
                 resume_meta = {"word_count": len(SAMPLE_RESUME_TEXT.split()), "sections": {}}
                 resume_pii = {}
