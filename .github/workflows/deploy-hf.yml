@@ -74,7 +74,8 @@ jobs:
           token = os.environ["HF_TOKEN"]
           repo_id = os.environ["SPACE_REPO"]
           workspace = Path(".").resolve()
-          deploy_dir = Path(tempfile.mkdtemp(prefix="hf_deploy_bundle_"))
+          tmp_root = Path(tempfile.mkdtemp(prefix="hf_deploy_bundle_"))
+          deploy_dir = tmp_root / "bundle"
 
           ignore_names = {
               ".git",
@@ -87,7 +88,6 @@ jobs:
               ".hf",
               "tests",
               "artifacts",
-              "data/app_history.db",
           }
 
           def _ignore(path, names):
@@ -115,5 +115,5 @@ jobs:
               )
               print(f"Deployed successfully to https://huggingface.co/spaces/{repo_id}")
           finally:
-              shutil.rmtree(deploy_dir, ignore_errors=True)
+              shutil.rmtree(tmp_root, ignore_errors=True)
           PY
