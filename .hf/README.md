@@ -1,8 +1,8 @@
 ---
 title: AI Resume Screener & Job Matcher
-emoji: 📄
-colorFrom: emerald
-colorTo: blue
+emoji: "\U0001F4C4"
+colorFrom: blue
+colorTo: indigo
 sdk: docker
 app_port: 8501
 pinned: false
