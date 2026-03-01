@@ -28,14 +28,32 @@ jobs:
             echo "HF_SPACE_REPO is not set (expected format: username/space-name)."
             exit 1
           fi
-          echo "Deploy target: ${HF_SPACE_REPO}"
+          echo "Raw deploy target: ${HF_SPACE_REPO}"
+
+      - name: Normalize Space repo path
+        id: normalize
+        run: |
+          SPACE_REPO="${HF_SPACE_REPO}"
+          SPACE_REPO="${SPACE_REPO#https://huggingface.co/spaces/}"
+          SPACE_REPO="${SPACE_REPO#http://huggingface.co/spaces/}"
+          SPACE_REPO="${SPACE_REPO#huggingface.co/spaces/}"
+          SPACE_REPO="${SPACE_REPO%.git}"
+
+          if [[ "${SPACE_REPO}" != */* ]]; then
+            echo "Invalid HF_SPACE_REPO after normalization: '${SPACE_REPO}'"
+            echo "Expected format: owner/space-name"
+            exit 1
+          fi
+
+          echo "space_repo=${SPACE_REPO}" >> "$GITHUB_OUTPUT"
+          echo "Normalized deploy target: ${SPACE_REPO}"
 
       # CI already runs tests in a separate workflow; deployment should remain fast and deterministic.
       - name: Verify Hugging Face Space access
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git ls-remote "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}" >/dev/null \
+          git ls-remote "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${{ steps.normalize.outputs.space_repo }}" >/dev/null \
           || (echo "Cannot access Space repo. Check HF_TOKEN scope and HF_SPACE_REPO value." && exit 1)
 
       - name: Sync repository to Hugging Face Space
@@ -45,7 +63,7 @@ jobs:
           git config --global user.email "github-actions@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
 
-          git clone "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}" hf_space
+          git clone "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${{ steps.normalize.outputs.space_repo }}" hf_space
 
           rsync -av --delete \
             --exclude ".git" \
