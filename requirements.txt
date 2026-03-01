@@ -1,0 +1,16 @@
+streamlit>=1.42.0
+PyMuPDF>=1.25.0
+sentence-transformers>=3.4.0
+scikit-learn>=1.6.0
+pandas>=2.2.0
+numpy>=2.1.0
+groq>=0.18.0
+reportlab>=4.2.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+python-multipart>=0.0.20
+scipy>=1.13.0
+pillow>=11.0.0
+pytesseract>=0.3.13
+httpx>=0.28.0
+pytest>=8.3.0
