@@ -260,12 +260,138 @@ def inject_custom_css() -> None:
                 padding-right: 0.65rem;
             }
             .stButton > button[kind="primary"] { border-radius: 10px; }
+
+            .eh-side-card {
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 18px;
+                padding: 1rem;
+                background: linear-gradient(180deg, rgba(24,30,43,0.98), rgba(16,22,34,0.98));
+                box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2);
+            }
+            .eh-side-title {
+                font-size: 1.05rem;
+                font-weight: 700;
+                color: #EAF4FF;
+                margin-bottom: 0.75rem;
+            }
+            .eh-score-ring {
+                width: 128px;
+                height: 128px;
+                margin: 0 auto;
+                border-radius: 999px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .eh-score-ring-inner {
+                width: 96px;
+                height: 96px;
+                border-radius: 999px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                background: rgba(9, 14, 24, 0.95);
+                border: 1px solid rgba(255,255,255,0.10);
+                color: #F7FBFF;
+                font-weight: 800;
+                font-size: 1.9rem;
+                line-height: 1;
+            }
+            .eh-score-ring-inner span {
+                font-size: 0.8rem;
+                color: #9fb2cb;
+                font-weight: 600;
+                margin-top: 0.25rem;
+            }
+            .eh-issues {
+                text-align: center;
+                color: #9fb2cb;
+                font-size: 0.86rem;
+                margin-top: 0.65rem;
+                margin-bottom: 0.75rem;
+            }
+            .eh-divider {
+                border-top: 1px solid rgba(255,255,255,0.09);
+                margin: 0.65rem 0 0.85rem 0;
+            }
+            .eh-cat-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.45rem 0.55rem;
+                border-radius: 10px;
+                border: 1px solid transparent;
+                margin-bottom: 0.12rem;
+            }
+            .eh-cat-row.active {
+                border-color: rgba(45, 212, 191, 0.35);
+                background: rgba(45, 212, 191, 0.08);
+            }
+            .eh-cat-name {
+                color: #d8e8fb;
+                font-size: 0.9rem;
+                font-weight: 600;
+            }
+            .eh-cat-meta {
+                color: #8ea3bf;
+                font-size: 0.76rem;
+                margin-bottom: 0.3rem;
+                margin-left: 0.58rem;
+            }
+            .eh-flow-card {
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 14px;
+                padding: 0.8rem 0.95rem;
+                background: rgba(24, 35, 52, 0.60);
+                margin-bottom: 0.65rem;
+            }
+            .eh-flow-item {
+                display: flex;
+                align-items: center;
+                gap: 0.55rem;
+                color: #d6e7fb;
+                font-size: 0.92rem;
+                margin: 0.2rem 0;
+            }
+            .eh-flow-item.dim {
+                color: #97adc8;
+            }
+            .eh-focus-meta {
+                border: 1px solid rgba(255,255,255,0.09);
+                border-radius: 10px;
+                padding: 0.55rem 0.7rem;
+                background: rgba(27, 38, 54, 0.5);
+                color: #b7c9df;
+                font-size: 0.86rem;
+                margin-bottom: 0.6rem;
+            }
+            .eh-item-title {
+                color: #eaf4ff;
+                font-size: 0.95rem;
+                font-weight: 700;
+                margin-bottom: 0.1rem;
+            }
+            .eh-item-status {
+                color: #9fb2cb;
+                font-size: 0.80rem;
+                margin-bottom: 0.35rem;
+            }
             @media (max-width: 768px) {
                 .block-container {
                     padding-left: 0.9rem;
                     padding-right: 0.9rem;
                 }
                 .score-value { font-size: 2rem; }
+                .eh-score-ring {
+                    width: 110px;
+                    height: 110px;
+                }
+                .eh-score-ring-inner {
+                    width: 82px;
+                    height: 82px;
+                    font-size: 1.5rem;
+                }
             }
         </style>
         """,
@@ -359,6 +485,14 @@ def _score_tone(score: float) -> str:
     if score >= 60:
         return "warn"
     return "bad"
+
+
+def _status_icon(score: float) -> str:
+    if score >= 80:
+        return "✅"
+    if score >= 60:
+        return "⚠️"
+    return "❌"
 
 
 def _quantification_score(results: Dict[str, Any]) -> float:
@@ -487,44 +621,73 @@ def build_interactive_audit(results: Dict[str, Any]) -> Dict[str, Any]:
 def render_interactive_audit_report(results: Dict[str, Any]) -> None:
     audit = build_interactive_audit(results)
     sections = audit["sections"]
+    focus_options = [section["name"] for section in sections]
+    focus_key = "audit_focus_section"
+    if focus_key not in st.session_state or st.session_state[focus_key] not in focus_options:
+        st.session_state[focus_key] = focus_options[0]
+    selected_section = next((item for item in sections if item["name"] == st.session_state[focus_key]), sections[0])
     left_col, right_col = st.columns([1.0, 2.2], gap="large")
 
     with left_col:
-        rows_html = []
+        ring_value = min(max(audit["overall"], 0.0), 100.0)
+        ring_degrees = int(round((ring_value / 100.0) * 360))
+        section_rows = []
         for section in sections:
             tone = _score_tone(section["score"])
-            rows_html.append(
-                (
-                    f'<div class="section-row">'
-                    f'<span class="label">{section["name"]}</span>'
-                    f'<span class="badge {tone}">{section["score"]:.0f}%</span>'
-                    f"</div>"
-                    f'<div class="section-sub">{_item_status(section["score"])} | {section["issues"]} issues</div>'
-                )
+            active_cls = "active" if section["name"] == selected_section["name"] else ""
+            icon = _status_icon(section["score"])
+            issue_word = "issue" if section["issues"] == 1 else "issues"
+            section_rows.append(
+                f'<div class="eh-cat-row {active_cls}">'
+                f'<span class="eh-cat-name">{icon} {section["name"]}</span>'
+                f'<span class="badge {tone}">{section["score"]:.0f}%</span>'
+                f"</div>"
+                f'<div class="eh-cat-meta">{section["issues"]} {issue_word} | {_item_status(section["score"])}</div>'
             )
+
+        st.markdown(
+            (
+                f'<div class="eh-side-card">'
+                f'<div class="eh-side-title">Your Score</div>'
+                f'<div class="eh-score-ring" style="background: conic-gradient(#22d3ee {ring_degrees}deg, rgba(255,255,255,0.12) 0deg);">'
+                f'<div class="eh-score-ring-inner">{ring_value:.0f}<span>/100</span></div>'
+                f"</div>"
+                f'<div class="eh-issues">{audit["issues"]} issues found</div>'
+                f'<div class="eh-divider"></div>'
+                f"{''.join(section_rows)}"
+                f"</div>"
+            ),
+            unsafe_allow_html=True,
+        )
+
+    with right_col:
+        st.markdown("### Interactive Resume Audit")
+        st.selectbox("Focus section", focus_options, key=focus_key)
+        selected_section = next((item for item in sections if item["name"] == st.session_state[focus_key]), sections[0])
+
+        has_llm_suggestions = bool((results.get("suggestions_payload") or {}).get("suggestions"))
+        flow_rows = [
+            ("✅", "Parsing your resume", True),
+            ("✅", "Analyzing your experience", True),
+            ("✅", "Extracting your skills", True),
+            ("✅" if has_llm_suggestions else "⚠️", "Generating recommendations", has_llm_suggestions),
+        ]
+        flow_html = "".join(
+            f'<div class="eh-flow-item{" dim" if not done else ""}">{icon} {label}</div>'
+            for icon, label, done in flow_rows
+        )
         st.markdown(
             f"""
-            <div class="report-card">
-                <div class="report-title">Your Score</div>
-                <div class="score-value">{audit["overall"]:.2f}<span>/100</span></div>
-                <div class="score-sub">{audit["issues"]} issues found</div>
-                <hr class="score-sep" />
-                {''.join(rows_html)}
+            <div class="eh-flow-card">
+                {flow_html}
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.progress(min(max(audit["overall"] / 100.0, 0.0), 1.0))
-
-    with right_col:
-        st.markdown("### Interactive Resume Audit")
-        focus_options = [section["name"] for section in sections]
-        focus_section = st.selectbox("Focus section", focus_options, key="audit_focus_section")
-        selected_section = next((item for item in sections if item["name"] == focus_section), sections[0])
 
         st.markdown(
             f"""
-            <div class="simple-subtab-note">
+            <div class="eh-focus-meta">
                 <strong>{selected_section["name"]}</strong> audit view:
                 score <strong>{selected_section["score"]:.0f}%</strong>,
                 status <strong>{_item_status(selected_section["score"])}</strong>,
@@ -534,17 +697,30 @@ def render_interactive_audit_report(results: Dict[str, Any]) -> None:
             unsafe_allow_html=True,
         )
 
+        low_items: List[Dict[str, Any]] = []
+
         for item in selected_section["items"]:
             tone = _score_tone(item["score"])
+            if item["score"] < 70:
+                low_items.append(item)
             with st.container(border=True):
                 c1, c2 = st.columns([4.0, 1.1])
-                c1.markdown(f"**{item['name']}**")
+                c1.markdown(f"<div class='eh-item-title'>{item['name']}</div>", unsafe_allow_html=True)
+                c1.markdown(
+                    f"<div class='eh-item-status'>{_status_icon(item['score'])} {_item_status(item['score'])}</div>",
+                    unsafe_allow_html=True,
+                )
                 c2.markdown(
                     f"<span class='badge {tone}'>{item['score']:.0f}%</span>",
                     unsafe_allow_html=True,
                 )
                 st.progress(min(max(item["score"] / 100.0, 0.0), 1.0))
                 st.markdown(f"<div class='hint-note'>{item['hint']}</div>", unsafe_allow_html=True)
+
+        if low_items:
+            st.markdown("#### Priority Fixes")
+            for item in low_items[:3]:
+                st.markdown(f"- **{item['name']}**: {item['hint']}")
 
         other_sections = [section for section in sections if section["name"] != selected_section["name"]]
         if other_sections:
@@ -860,22 +1036,35 @@ def render_single_results(
     tailored_draft = results["tailored_resume_draft"]
 
     st.markdown("### Match Overview")
-    metric_cols = st.columns(6)
-    metric_cols[0].metric("Overall Match", f"{score['overall']}%")
-    metric_cols[1].metric("Calibrated", f"{confidence['calibrated_overall']}%")
-    metric_cols[2].metric("Confidence", f"{confidence['confidence_pct']}%")
-    metric_cols[3].metric("Confidence Band", confidence["band"])
-    metric_cols[4].metric("Skill Alignment", f"{score['skill_alignment']}%")
-    metric_cols[5].metric("ATS Score", f"{ats['ats_score']}%")
+    if simple_mode:
+        metric_cols = st.columns(4)
+        metric_cols[0].metric("Overall Match", f"{score['overall']}%")
+        metric_cols[1].metric("ATS Score", f"{ats['ats_score']}%")
+        metric_cols[2].metric("Skill Alignment", f"{score['skill_alignment']}%")
+        metric_cols[3].metric("Confidence", f"{confidence['confidence_pct']}%")
+    else:
+        metric_cols = st.columns(6)
+        metric_cols[0].metric("Overall Match", f"{score['overall']}%")
+        metric_cols[1].metric("Calibrated", f"{confidence['calibrated_overall']}%")
+        metric_cols[2].metric("Confidence", f"{confidence['confidence_pct']}%")
+        metric_cols[3].metric("Confidence Band", confidence["band"])
+        metric_cols[4].metric("Skill Alignment", f"{score['skill_alignment']}%")
+        metric_cols[5].metric("ATS Score", f"{ats['ats_score']}%")
     st.progress(min(max(score["overall"] / 100, 0.0), 1.0))
 
     language = results.get("language", {})
-    st.caption(
-        f"Detected Languages -> Resume: {language_label(language.get('resume', 'unknown'))}, "
-        f"JD: {language_label(language.get('jd', 'unknown'))}; "
-        f"Model Used: `{language.get('effective_model', 'n/a')}`; "
-        f"Role Template: **{results.get('role_template', 'General')}**"
-    )
+    if simple_mode:
+        st.caption(
+            f"Role Template: **{results.get('role_template', 'General')}** | "
+            f"Model: `{language.get('effective_model', 'n/a')}`"
+        )
+    else:
+        st.caption(
+            f"Detected Languages -> Resume: {language_label(language.get('resume', 'unknown'))}, "
+            f"JD: {language_label(language.get('jd', 'unknown'))}; "
+            f"Model Used: `{language.get('effective_model', 'n/a')}`; "
+            f"Role Template: **{results.get('role_template', 'General')}**"
+        )
 
     if simple_mode:
         tab_labels = (
