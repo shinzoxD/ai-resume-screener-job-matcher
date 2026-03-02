@@ -333,6 +333,8 @@ def inject_custom_css() -> None:
                 padding: 1rem;
                 background: linear-gradient(180deg, rgba(24,30,43,0.98), rgba(16,22,34,0.98));
                 box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2);
+                width: 100%;
+                box-sizing: border-box;
             }
             .eh-side-title {
                 font-size: 1.05rem;
@@ -398,6 +400,7 @@ def inject_custom_css() -> None:
                 color: #d8e8fb;
                 font-size: 0.9rem;
                 font-weight: 600;
+                min-width: 0;
             }
             .eh-cat-meta {
                 color: #8ea3bf;
@@ -422,6 +425,21 @@ def inject_custom_css() -> None:
             }
             .eh-flow-item.dim {
                 color: #97adc8;
+            }
+            .eh-flow-dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 999px;
+                flex: 0 0 10px;
+                display: inline-block;
+            }
+            .eh-flow-dot.done {
+                background: #22c55e;
+                box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22);
+            }
+            .eh-flow-dot.warn {
+                background: #f59e0b;
+                box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
             }
             .eh-focus-meta {
                 border: 1px solid rgba(255,255,255,0.09);
@@ -737,14 +755,14 @@ def render_interactive_audit_report(results: Dict[str, Any]) -> None:
 
         has_llm_suggestions = bool((results.get("suggestions_payload") or {}).get("suggestions"))
         flow_rows = [
-            ("OK", "Parsing your resume", True),
-            ("OK", "Analyzing your experience", True),
-            ("OK", "Extracting your skills", True),
-            ("OK" if has_llm_suggestions else "WARN", "Generating recommendations", has_llm_suggestions),
+            ("Parsing your resume", True),
+            ("Analyzing your experience", True),
+            ("Extracting your skills", True),
+            ("Generating recommendations", has_llm_suggestions),
         ]
         flow_html = "".join(
-            f'<div class="eh-flow-item{" dim" if not done else ""}">{icon} {label}</div>'
-            for icon, label, done in flow_rows
+            f'<div class="eh-flow-item{" dim" if not done else ""}"><span class="eh-flow-dot {"done" if done else "warn"}"></span>{label}</div>'
+            for label, done in flow_rows
         )
         st.markdown(
             f"""
@@ -1222,14 +1240,14 @@ def render_resume_health_results(results: Dict[str, Any]) -> None:
 
     with right_col:
         flow_rows = [
-            ("OK", "Parsing your resume", True),
-            ("OK", "Reviewing structure and sections", True),
-            ("OK", "Checking skills and impact quality", True),
-            ("OK" if suggestions else "WARN", "Generating recommendations", bool(suggestions)),
+            ("Parsing your resume", True),
+            ("Reviewing structure and sections", True),
+            ("Checking skills and impact quality", True),
+            ("Generating recommendations", bool(suggestions)),
         ]
         flow_html = "".join(
-            f'<div class="eh-flow-item{" dim" if not done else ""}">{icon} {label}</div>'
-            for icon, label, done in flow_rows
+            f'<div class="eh-flow-item{" dim" if not done else ""}"><span class="eh-flow-dot {"done" if done else "warn"}"></span>{label}</div>'
+            for label, done in flow_rows
         )
         st.markdown(
             f"""
