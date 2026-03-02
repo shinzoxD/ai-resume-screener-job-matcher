@@ -74,28 +74,28 @@ This project provides:
 ## Architecture
 ```mermaid
 flowchart TD
-    A[Resume PDF(s) + JD Text/PDF] --> B[Extraction Layer]
-    B --> C[Text Cleaning + Section Detection]
+    A[Resume and JD Inputs] --> B[Extraction Layer]
+    B --> C[Text Cleaning and Section Detection]
     C --> D[PII Redaction Optional]
     D --> E[Hybrid Scoring Engine]
-    E --> E1[Semantic Similarity - SentenceTransformer]
-    E --> E2[Lexical Similarity - TF-IDF]
-    E --> E3[Skill Alignment - Ontology Match]
-    E --> E4[Cross-Encoder Reranker Optional]
+    E --> E1[Semantic Similarity SentenceTransformer]
+    E --> E2[Lexical Similarity TF IDF]
+    E --> E3[Skill Alignment Ontology Match]
+    E --> E4[Cross Encoder Reranker Optional]
     E --> F[Explainability]
     F --> F1[Feature Contributions]
-    F --> F2[Matched/Missing Keywords]
+    F --> F2[Matched and Missing Keywords]
     F --> F3[Evidence Points]
     D --> G[ATS Analyzer]
     G --> G1[Section Score]
     G --> G2[Contact Score]
     G --> G3[Keyword Score]
-    G --> G4[Length/Bullet Score]
+    G --> G4[Length and Bullet Score]
     F --> H[LLM Suggestions Optional]
-    G --> I[Streamlit UI + Downloads]
+    G --> I[Streamlit UI and Downloads]
     H --> I
-    E --> J[FastAPI /analyze Endpoint]
-    I --> K[Reports: Markdown / PDF / JSON / CSV]
+    E --> J[FastAPI Analyze Endpoint]
+    I --> K[Reports Markdown PDF JSON CSV]
 ```
 
 ## Features
