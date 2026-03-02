@@ -259,7 +259,73 @@ def inject_custom_css() -> None:
                 padding-left: 0.65rem;
                 padding-right: 0.65rem;
             }
-            .stButton > button[kind="primary"] { border-radius: 10px; }
+            .stButton > button[kind="primary"] {
+                border-radius: 12px;
+                border: 0;
+                min-height: 3rem;
+                font-size: 1rem;
+                font-weight: 700;
+                letter-spacing: 0.2px;
+                color: #f7fbff;
+                background: linear-gradient(100deg, #00c6a7, #00a8ff);
+                box-shadow: 0 12px 26px rgba(0, 168, 255, 0.24);
+                transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
+            }
+            .stButton > button[kind="primary"]:hover {
+                transform: translateY(-1px);
+                filter: brightness(1.02);
+                box-shadow: 0 16px 30px rgba(0, 168, 255, 0.28);
+            }
+            .home-shell {
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 16px;
+                background: linear-gradient(140deg, rgba(18, 28, 43, 0.9), rgba(13, 20, 31, 0.95));
+                padding: 1rem;
+                margin-bottom: 0.95rem;
+            }
+            .home-title {
+                font-size: 1.04rem;
+                font-weight: 700;
+                color: #eaf4ff;
+                margin-bottom: 0.2rem;
+            }
+            .home-sub {
+                color: #9fb3cc;
+                font-size: 0.9rem;
+                margin-bottom: 0.65rem;
+            }
+            .home-step {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                margin-right: 0.45rem;
+                margin-bottom: 0.35rem;
+                padding: 0.26rem 0.52rem;
+                border-radius: 999px;
+                border: 1px solid rgba(255,255,255,0.12);
+                background: rgba(15, 25, 38, 0.55);
+                color: #d6e6fa;
+                font-size: 0.78rem;
+                font-weight: 600;
+            }
+            .home-ready.good {
+                border: 1px solid rgba(52,211,153,0.35);
+                border-radius: 10px;
+                padding: 0.45rem 0.62rem;
+                background: rgba(52,211,153,0.11);
+                color: #86efac;
+                font-size: 0.87rem;
+                margin-top: 0.5rem;
+            }
+            .home-ready.warn {
+                border: 1px solid rgba(245,158,11,0.35);
+                border-radius: 10px;
+                padding: 0.45rem 0.62rem;
+                background: rgba(245,158,11,0.11);
+                color: #fcd34d;
+                font-size: 0.87rem;
+                margin-top: 0.5rem;
+            }
 
             .eh-side-card {
                 border: 1px solid rgba(255,255,255,0.10);
@@ -391,6 +457,10 @@ def inject_custom_css() -> None:
                     width: 82px;
                     height: 82px;
                     font-size: 1.5rem;
+                }
+                .stButton > button[kind="primary"] {
+                    min-height: 2.85rem;
+                    font-size: 0.95rem;
                 }
             }
         </style>
@@ -1447,19 +1517,7 @@ def main() -> None:
             source_index = 1 if st.session_state.use_sample else 0
             input_source = st.radio("Input Source", source_options, index=source_index)
             st.session_state.use_sample = input_source == "Use Built-in Sample"
-
-            st.markdown("### Inputs")
-            if st.session_state.use_sample:
-                st.info("Sample mode is ON. Built-in resume and JD will be used.")
-            else:
-                resume_pdf = st.file_uploader("Resume PDF", type=["pdf"], accept_multiple_files=False)
-                use_jd_upload = st.checkbox("Upload JD file instead of pasting text", value=False)
-                if use_jd_upload:
-                    jd_mode = "Upload File"
-                    jd_upload = st.file_uploader("Upload JD (PDF or TXT)", type=["pdf", "txt"])
-                else:
-                    jd_mode = "Paste Text"
-                    jd_pasted = st.text_area("Paste Job Description", height=220)
+            st.caption("Inputs are on the main screen below.")
 
             st.markdown("### LLM Suggestions")
             groq_api_key = secret_groq_key
@@ -1516,6 +1574,72 @@ def main() -> None:
                 reranker_model = st.text_input("Reranker Model", value=DEFAULT_RERANKER_MODEL)
                 use_ocr_fallback = st.checkbox("OCR Fallback for Scanned PDFs", value=True)
                 redact_enabled = st.checkbox("Redact PII Before Analysis", value=False)
+
+    if simple_mode:
+        st.markdown(
+            """
+            <div class="home-shell">
+                <div class="home-title">Start Your Resume Match</div>
+                <div class="home-sub">Upload your resume, add the target job description, and get an interactive audit + AI suggestions.</div>
+                <span class="home-step">1 Upload Resume</span>
+                <span class="home-step">2 Add Job Description</span>
+                <span class="home-step">3 Analyze and Improve</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if st.session_state.use_sample:
+            st.markdown(
+                "<div class='home-ready good'>Sample mode active. Built-in resume and JD will be analyzed when you click Analyze.</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            i1, i2 = st.columns([1, 1], gap="large")
+            with i1:
+                with st.container(border=True):
+                    st.markdown("#### Resume")
+                    st.caption("Upload one resume PDF (max 20MB).")
+                    resume_pdf = st.file_uploader(
+                        "Upload Resume PDF",
+                        type=["pdf"],
+                        accept_multiple_files=False,
+                        key="main_resume_pdf",
+                    )
+            with i2:
+                with st.container(border=True):
+                    st.markdown("#### Job Description")
+                    jd_mode_pick = st.radio(
+                        "JD Input Type",
+                        ["Paste Text", "Upload File"],
+                        horizontal=True,
+                        key="main_jd_mode_pick",
+                    )
+                    if jd_mode_pick == "Upload File":
+                        jd_mode = "Upload File"
+                        jd_upload = st.file_uploader(
+                            "Upload JD (PDF or TXT)",
+                            type=["pdf", "txt"],
+                            key="main_jd_upload",
+                        )
+                    else:
+                        jd_mode = "Paste Text"
+                        jd_pasted = st.text_area(
+                            "Paste Job Description",
+                            height=190,
+                            key="main_jd_pasted",
+                            placeholder="Paste the full job description here...",
+                        )
+
+            resume_ready = bool(resume_pdf)
+            jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
+            ready_cls = "good" if (resume_ready and jd_ready) else "warn"
+            ready_text = (
+                "Inputs ready. Click Analyze."
+                if (resume_ready and jd_ready)
+                else "Upload both Resume and JD to enable a full analysis."
+            )
+            st.markdown(f"<div class='home-ready {ready_cls}'>{ready_text}</div>", unsafe_allow_html=True)
 
     if simple_mode:
         action_label = "Analyze Resume with AI Suggestions"
@@ -1662,7 +1786,7 @@ def main() -> None:
     )
     if simple_mode:
         if not st.session_state.analysis_results:
-            st.info("Upload resume + JD, then click Analyze to see AI suggestions.")
+            st.caption("Fill the home inputs above, then click Analyze.")
         else:
             render_single_results(
                 st.session_state.analysis_results,
