@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import textwrap
 from datetime import datetime
 from typing import Any, Dict, List, Sequence
@@ -197,6 +198,171 @@ def render_next_steps_checklist(missing_skills: Sequence[str], target_score: flo
     st.markdown(f"- [ ] Add measurable evidence bullets for: {top_missing}.")
     st.markdown("- [ ] Mirror 5 exact JD keywords in your Summary + Skills sections.")
     st.markdown(f"- [ ] Re-run analysis and target at least **{target_score:.0f}%** overall match.")
+
+
+def _item_status(score: float) -> str:
+    if score >= 80:
+        return "No issues"
+    if score >= 60:
+        return "Needs work"
+    return "High priority"
+
+
+def _quantification_score(results: Dict[str, Any]) -> float:
+    bullets = results.get("rewriter", {}).get("original_bullets", []) or []
+    if not bullets:
+        bullets = [
+            line.strip()
+            for line in results.get("resume_text", "").splitlines()
+            if line.strip().startswith("-")
+        ]
+    if not bullets:
+        return 50.0
+    quantified = sum(1 for bullet in bullets if re.search(r"\d|%|\$", bullet))
+    return round((quantified / max(len(bullets), 1)) * 100, 2)
+
+
+def build_interactive_audit(results: Dict[str, Any]) -> Dict[str, Any]:
+    score = results["score_details"]
+    ats = results["ats_details"]
+    requirement_map = results.get("requirement_map", [])
+
+    must_have = [row for row in requirement_map if row.get("category") == "Must-Have"]
+    must_covered = [row for row in must_have if row.get("status") == "Covered"]
+    must_have_coverage = (
+        round((len(must_covered) / max(len(must_have), 1)) * 100, 2) if must_have else 70.0
+    )
+    quant_score = _quantification_score(results)
+
+    sections = [
+        {
+            "name": "Content",
+            "items": [
+                {
+                    "name": "ATS Parse Readiness",
+                    "score": float(ats.get("section_score", 0)),
+                    "hint": "Use clear section headers and clean structure.",
+                },
+                {
+                    "name": "Quantified Impact",
+                    "score": quant_score,
+                    "hint": "Add metrics like percentages, revenue, or time saved.",
+                },
+                {
+                    "name": "Keyword Match",
+                    "score": float(ats.get("keyword_score", 0)),
+                    "hint": "Mirror high-value JD phrases in Summary and Skills.",
+                },
+            ],
+        },
+        {
+            "name": "Sections",
+            "items": [
+                {
+                    "name": "Section Completeness",
+                    "score": float(ats.get("section_score", 0)),
+                    "hint": "Include Summary, Experience, Skills, Projects, Education.",
+                },
+                {
+                    "name": "Contact Completeness",
+                    "score": float(ats.get("contact_score", 0)),
+                    "hint": "Keep email, phone, and LinkedIn visible and valid.",
+                },
+                {
+                    "name": "Must-Have Requirement Coverage",
+                    "score": must_have_coverage,
+                    "hint": "Align bullets to mandatory job requirements.",
+                },
+            ],
+        },
+        {
+            "name": "ATS Essentials",
+            "items": [
+                {
+                    "name": "ATS Compatibility",
+                    "score": float(ats.get("ats_score", 0)),
+                    "hint": "Keep formatting ATS-safe and text-selectable.",
+                },
+                {
+                    "name": "Bullet and Layout Quality",
+                    "score": float(ats.get("bullet_score", 0)),
+                    "hint": "Use concise bullet points and consistent spacing.",
+                },
+                {
+                    "name": "Resume Length Quality",
+                    "score": float(ats.get("length_score", 0)),
+                    "hint": "Stay concise and prioritize relevant experience.",
+                },
+            ],
+        },
+        {
+            "name": "Tailoring",
+            "items": [
+                {
+                    "name": "Semantic Alignment",
+                    "score": float(score.get("semantic", 0)),
+                    "hint": "Match role language and responsibilities from the JD.",
+                },
+                {
+                    "name": "Skill Alignment",
+                    "score": float(score.get("skill_alignment", 0)),
+                    "hint": "Close high-impact missing skills with project evidence.",
+                },
+                {
+                    "name": "Lexical Match",
+                    "score": float(score.get("lexical", 0)),
+                    "hint": "Use exact terms from the job description where honest.",
+                },
+            ],
+        },
+    ]
+
+    total_issues = 0
+    for section in sections:
+        section_scores = [item["score"] for item in section["items"]]
+        section["score"] = round(sum(section_scores) / max(len(section_scores), 1), 2)
+        section["issues"] = sum(1 for value in section_scores if value < 70)
+        total_issues += section["issues"]
+
+    return {
+        "overall": float(score.get("overall", 0)),
+        "sections": sections,
+        "issues": total_issues,
+    }
+
+
+def render_interactive_audit_report(results: Dict[str, Any]) -> None:
+    audit = build_interactive_audit(results)
+    sections = audit["sections"]
+
+    left_col, right_col = st.columns([1.05, 2.25], gap="large")
+    with left_col:
+        st.markdown("### Your Score")
+        st.metric("Overall", f"{audit['overall']:.2f}/100")
+        st.caption(f"{audit['issues']} issues found")
+        st.markdown("---")
+        for section in sections:
+            st.markdown(
+                f"**{section['name']}**  \n"
+                f"Score: `{section['score']:.0f}%`  \n"
+                f"Status: {_item_status(section['score'])}"
+            )
+
+    with right_col:
+        st.markdown("### Interactive Resume Audit")
+        focus_options = [section["name"] for section in sections]
+        focus_section = st.selectbox("Focus section", focus_options, key="audit_focus_section")
+
+        for section in sections:
+            expanded = section["name"] == focus_section
+            with st.expander(
+                f"{section['name']}  |  Score {section['score']:.0f}%  |  {section['issues']} issues",
+                expanded=expanded,
+            ):
+                for item in section["items"]:
+                    st.markdown(f"**{item['name']}**")
+                    st.progress(min(max(item["score"] / 100.0, 0.0), 1.0))
+                    st.caption(f"Status: {_item_status(item['score'])}. {item['hint']}")
 
 
 def markdown_to_pdf_bytes(markdown_text: str) -> bytes:
@@ -522,21 +688,18 @@ def render_single_results(
     )
 
     if simple_mode:
-        tab_labels = ["Suggestions", "Summary", "Skills Gap"] if focus_suggestions else ["Summary", "Skills Gap", "Suggestions"]
+        tab_labels = (
+            ["Suggestions", "Interactive Report", "Skills Gap"]
+            if focus_suggestions
+            else ["Interactive Report", "Skills Gap", "Suggestions"]
+        )
         if focus_suggestions:
             st.info("Opened Suggestions first for quick action.")
         tab_objs = st.tabs(tab_labels)
         tab_map = {name: tab for name, tab in zip(tab_labels, tab_objs)}
 
-        with tab_map["Summary"]:
-            st.markdown("#### Strong Points")
-            for point in strong_points:
-                st.markdown(f"- {point}")
-            st.markdown("#### Score Breakdown")
-            b1, b2, b3 = st.columns(3)
-            b1.metric("Semantic", f"{score['semantic']}%")
-            b2.metric("Lexical", f"{score['lexical']}%")
-            b3.metric("Confidence", f"{confidence['confidence_pct']}%")
+        with tab_map["Interactive Report"]:
+            render_interactive_audit_report(results)
 
         with tab_map["Skills Gap"]:
             c1, c2 = st.columns(2)
