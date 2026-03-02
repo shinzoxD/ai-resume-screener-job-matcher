@@ -121,18 +121,151 @@ def inject_custom_css() -> None:
             .block-container { padding-top: 1.1rem; padding-bottom: 2rem; }
             .app-hero {
                 border: 1px solid rgba(0, 184, 148, 0.25);
-                padding: 1rem 1.2rem; border-radius: 14px;
+                padding: 1rem 1.2rem;
+                border-radius: 14px;
                 background: linear-gradient(120deg, rgba(0, 184, 148, 0.12), rgba(9, 132, 227, 0.08));
                 margin-bottom: 1rem;
             }
-            .pill {
-                display: inline-block; padding: 0.32rem 0.72rem; margin: 0.2rem 0.26rem 0.2rem 0;
-                border-radius: 999px; border: 1px solid rgba(0, 184, 148, 0.35);
-                background-color: rgba(0, 184, 148, 0.14); font-size: 0.84rem;
+            .app-hero h2 {
+                margin: 0;
+                letter-spacing: 0.2px;
             }
-            .muted { color: #9AA5B1; font-size: 0.9rem; }
+            .app-hero p {
+                margin: 0.35rem 0 0 0;
+                color: #d8e7f7;
+            }
+            .pill {
+                display: inline-block;
+                padding: 0.32rem 0.72rem;
+                margin: 0.2rem 0.26rem 0.2rem 0;
+                border-radius: 999px;
+                border: 1px solid rgba(0, 184, 148, 0.35);
+                background-color: rgba(0, 184, 148, 0.14);
+                font-size: 0.84rem;
+            }
+            .muted {
+                color: #9AA5B1;
+                font-size: 0.9rem;
+            }
+            .report-card {
+                border: 1px solid rgba(255,255,255,0.09);
+                border-radius: 16px;
+                padding: 16px;
+                background: linear-gradient(180deg, rgba(22,28,40,0.98), rgba(15,20,30,0.98));
+                box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
+            }
+            .report-title {
+                font-size: 1.05rem;
+                font-weight: 700;
+                color: #EAF5FF;
+                margin-bottom: 0.65rem;
+            }
+            .score-value {
+                font-size: 2.3rem;
+                font-weight: 800;
+                line-height: 1.1;
+                color: #F7FBFF;
+            }
+            .score-value span {
+                font-size: 1rem;
+                opacity: 0.7;
+                margin-left: 4px;
+                font-weight: 600;
+            }
+            .score-sub {
+                margin-top: 0.25rem;
+                color: #AEBBD0;
+                font-size: 0.88rem;
+            }
+            .score-meta {
+                margin-top: 0.55rem;
+                color: #90a6c2;
+                font-size: 0.82rem;
+            }
+            .score-sep {
+                margin: 12px 0;
+                border: 0;
+                border-top: 1px solid rgba(255,255,255,0.08);
+            }
+            .section-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 0.46rem;
+                font-size: 0.9rem;
+            }
+            .section-row .label {
+                color: #DCE8F9;
+                font-weight: 600;
+            }
+            .section-sub {
+                color: #90a6c2;
+                font-size: 0.78rem;
+                margin: 0 0 0.42rem 0;
+            }
+            .badge {
+                border-radius: 999px;
+                padding: 2px 10px;
+                font-size: 0.76rem;
+                font-weight: 700;
+                border: 1px solid transparent;
+                white-space: nowrap;
+            }
+            .badge.good { background: rgba(16,185,129,0.18); color: #86efac; border-color: rgba(16,185,129,0.35); }
+            .badge.warn { background: rgba(245,158,11,0.16); color: #fcd34d; border-color: rgba(245,158,11,0.35); }
+            .badge.bad { background: rgba(239,68,68,0.14); color: #fca5a5; border-color: rgba(239,68,68,0.35); }
+            .audit-panel {
+                border: 1px solid rgba(255,255,255,0.09);
+                border-radius: 16px;
+                padding: 14px;
+                background: linear-gradient(180deg, rgba(20,27,40,0.94), rgba(14,19,30,0.94));
+            }
+            .audit-item {
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 12px;
+                padding: 10px 12px;
+                margin-bottom: 10px;
+                background: rgba(10, 14, 24, 0.74);
+            }
+            .audit-item h4 {
+                margin: 0 0 4px 0;
+                font-size: 0.94rem;
+                color: #EAF4FF;
+            }
+            .audit-item p {
+                margin: 0;
+                color: #91A4BF;
+                font-size: 0.83rem;
+                margin-top: 6px;
+            }
+            .hint-note {
+                color: #9ab1cb;
+                font-size: 0.82rem;
+                margin-top: 0.15rem;
+            }
+            .simple-subtab-note {
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 10px;
+                padding: 0.55rem 0.7rem;
+                background: rgba(27, 38, 54, 0.5);
+                color: #b7c9df;
+                font-size: 0.86rem;
+                margin-bottom: 0.6rem;
+            }
+            .stTabs [data-baseweb="tab-list"] { gap: 0.25rem; }
+            .stTabs [data-baseweb="tab"] {
+                height: 2.1rem;
+                border-radius: 8px 8px 0 0;
+                padding-left: 0.65rem;
+                padding-right: 0.65rem;
+            }
+            .stButton > button[kind="primary"] { border-radius: 10px; }
             @media (max-width: 768px) {
-                .block-container { padding-left: 0.9rem; padding-right: 0.9rem; }
+                .block-container {
+                    padding-left: 0.9rem;
+                    padding-right: 0.9rem;
+                }
+                .score-value { font-size: 2rem; }
             }
         </style>
         """,
@@ -189,15 +322,29 @@ def render_copy_suggestions_widget(suggestions: Sequence[str], *, key_suffix: st
         """,
         height=62,
     )
-    st.text_area("Copy Fallback", value=payload_text, height=120, key=f"copy_fallback_{key_suffix}")
+    with st.expander("Copy fallback (if browser blocks clipboard)", expanded=False):
+        st.text_area("Manual Copy", value=payload_text, height=120, key=f"copy_fallback_{key_suffix}")
 
 
-def render_next_steps_checklist(missing_skills: Sequence[str], target_score: float = 70.0) -> None:
+def render_next_steps_checklist(
+    missing_skills: Sequence[str],
+    target_score: float = 70.0,
+    key_prefix: str = "default",
+) -> None:
     top_missing = ", ".join(list(missing_skills)[:3]) if missing_skills else "top missing skills"
     st.markdown("#### What To Do Next")
-    st.markdown(f"- [ ] Add measurable evidence bullets for: {top_missing}.")
-    st.markdown("- [ ] Mirror 5 exact JD keywords in your Summary + Skills sections.")
-    st.markdown(f"- [ ] Re-run analysis and target at least **{target_score:.0f}%** overall match.")
+    st.checkbox(
+        f"Add measurable evidence bullets for: {top_missing}.",
+        key=f"{key_prefix}_next_step_1",
+    )
+    st.checkbox(
+        "Mirror 5 exact JD keywords in your Summary and Skills sections.",
+        key=f"{key_prefix}_next_step_2",
+    )
+    st.checkbox(
+        f"Re-run analysis and target at least {target_score:.0f}% overall match.",
+        key=f"{key_prefix}_next_step_3",
+    )
 
 
 def _item_status(score: float) -> str:
@@ -206,6 +353,14 @@ def _item_status(score: float) -> str:
     if score >= 60:
         return "Needs work"
     return "High priority"
+
+
+def _score_tone(score: float) -> str:
+    if score >= 80:
+        return "good"
+    if score >= 60:
+        return "warn"
+    return "bad"
 
 
 def _quantification_score(results: Dict[str, Any]) -> float:
@@ -334,35 +489,72 @@ def build_interactive_audit(results: Dict[str, Any]) -> Dict[str, Any]:
 def render_interactive_audit_report(results: Dict[str, Any]) -> None:
     audit = build_interactive_audit(results)
     sections = audit["sections"]
+    left_col, right_col = st.columns([1.0, 2.2], gap="large")
 
-    left_col, right_col = st.columns([1.05, 2.25], gap="large")
     with left_col:
-        st.markdown("### Your Score")
-        st.metric("Overall", f"{audit['overall']:.2f}/100")
-        st.caption(f"{audit['issues']} issues found")
-        st.markdown("---")
+        rows_html = []
         for section in sections:
-            st.markdown(
-                f"**{section['name']}**  \n"
-                f"Score: `{section['score']:.0f}%`  \n"
-                f"Status: {_item_status(section['score'])}"
+            tone = _score_tone(section["score"])
+            rows_html.append(
+                f"""
+                <div class="section-row">
+                    <span class="label">{section["name"]}</span>
+                    <span class="badge {tone}">{section["score"]:.0f}%</span>
+                </div>
+                <div class="section-sub">{_item_status(section["score"])} | {section["issues"]} issues</div>
+                """
             )
+        st.markdown(
+            f"""
+            <div class="report-card">
+                <div class="report-title">Your Score</div>
+                <div class="score-value">{audit["overall"]:.2f}<span>/100</span></div>
+                <div class="score-sub">{audit["issues"]} issues found</div>
+                <hr class="score-sep" />
+                {''.join(rows_html)}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.progress(min(max(audit["overall"] / 100.0, 0.0), 1.0))
 
     with right_col:
         st.markdown("### Interactive Resume Audit")
         focus_options = [section["name"] for section in sections]
         focus_section = st.selectbox("Focus section", focus_options, key="audit_focus_section")
+        selected_section = next((item for item in sections if item["name"] == focus_section), sections[0])
 
-        for section in sections:
-            expanded = section["name"] == focus_section
-            with st.expander(
-                f"{section['name']}  |  Score {section['score']:.0f}%  |  {section['issues']} issues",
-                expanded=expanded,
-            ):
-                for item in section["items"]:
-                    st.markdown(f"**{item['name']}**")
-                    st.progress(min(max(item["score"] / 100.0, 0.0), 1.0))
-                    st.caption(f"Status: {_item_status(item['score'])}. {item['hint']}")
+        st.markdown(
+            f"""
+            <div class="simple-subtab-note">
+                <strong>{selected_section["name"]}</strong> audit view:
+                score <strong>{selected_section["score"]:.0f}%</strong>,
+                status <strong>{_item_status(selected_section["score"])}</strong>,
+                issues <strong>{selected_section["issues"]}</strong>.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        for item in selected_section["items"]:
+            tone = _score_tone(item["score"])
+            with st.container(border=True):
+                c1, c2 = st.columns([4.0, 1.1])
+                c1.markdown(f"**{item['name']}**")
+                c2.markdown(
+                    f"<span class='badge {tone}'>{item['score']:.0f}%</span>",
+                    unsafe_allow_html=True,
+                )
+                st.progress(min(max(item["score"] / 100.0, 0.0), 1.0))
+                st.markdown(f"<div class='hint-note'>{item['hint']}</div>", unsafe_allow_html=True)
+
+        other_sections = [section for section in sections if section["name"] != selected_section["name"]]
+        if other_sections:
+            with st.expander("Other sections", expanded=False):
+                for section in other_sections:
+                    st.markdown(
+                        f"- **{section['name']}**: {section['score']:.0f}% ({section['issues']} issues, {_item_status(section['score'])})"
+                    )
 
 
 def markdown_to_pdf_bytes(markdown_text: str) -> bytes:
@@ -689,17 +881,23 @@ def render_single_results(
 
     if simple_mode:
         tab_labels = (
-            ["Suggestions", "Interactive Report", "Skills Gap"]
+            ["Suggestions", "Summary", "Skills Gap"]
             if focus_suggestions
-            else ["Interactive Report", "Skills Gap", "Suggestions"]
+            else ["Summary", "Skills Gap", "Suggestions"]
         )
-        if focus_suggestions:
-            st.info("Opened Suggestions first for quick action.")
         tab_objs = st.tabs(tab_labels)
         tab_map = {name: tab for name, tab in zip(tab_labels, tab_objs)}
 
-        with tab_map["Interactive Report"]:
+        with tab_map["Summary"]:
             render_interactive_audit_report(results)
+            st.markdown("#### Strong Points")
+            for point in strong_points[:3]:
+                st.markdown(f"- {point}")
+            st.markdown("#### Score Breakdown")
+            sb1, sb2, sb3 = st.columns(3)
+            sb1.metric("Semantic", f"{score['semantic']}%")
+            sb2.metric("Lexical", f"{score['lexical']}%")
+            sb3.metric("Confidence", f"{confidence['confidence_pct']}%")
 
         with tab_map["Skills Gap"]:
             c1, c2 = st.columns(2)
@@ -726,7 +924,7 @@ def render_single_results(
                 st.markdown(f"{idx}. {suggestion}")
 
             render_copy_suggestions_widget(suggestions or ["No suggestions generated in this mode."], key_suffix="simple")
-            render_next_steps_checklist(format_skill_list(skills["missing_skills"]))
+            render_next_steps_checklist(format_skill_list(skills["missing_skills"]), key_prefix="simple")
 
             report_md = build_suggestions_markdown(
                 match_score=score["overall"],
@@ -1147,8 +1345,7 @@ def main() -> None:
     run_clicked = st.button(action_label, type="primary", use_container_width=True)
 
     if run_clicked and simple_mode and not groq_api_key.strip():
-        st.error("Simple mode requires `GROQ_API_KEY` to generate LLM suggestions. Add it in Space Secrets.")
-        run_clicked = False
+        st.warning("No `GROQ_API_KEY` found. Running with rule-based suggestions for this analysis.")
 
     if run_clicked:
         with st.spinner("Preparing inputs..."):
