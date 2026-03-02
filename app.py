@@ -297,15 +297,14 @@ def inject_custom_css() -> None:
             .home-step {
                 display: inline-flex;
                 align-items: center;
-                gap: 0.35rem;
-                margin-right: 0.45rem;
+                gap: 0.45rem;
                 margin-bottom: 0.35rem;
-                padding: 0.26rem 0.52rem;
-                border-radius: 999px;
+                padding: 0.34rem 0.62rem;
+                border-radius: 12px;
                 border: 1px solid rgba(255,255,255,0.12);
                 background: rgba(15, 25, 38, 0.55);
                 color: #d6e6fa;
-                font-size: 0.78rem;
+                font-size: 0.8rem;
                 font-weight: 600;
             }
             .home-steps {
@@ -326,6 +325,10 @@ def inject_custom_css() -> None:
                 color: #dff4ff;
                 background: rgba(45, 212, 191, 0.2);
                 border: 1px solid rgba(45, 212, 191, 0.45);
+            }
+            .home-step-label {
+                line-height: 1.15;
+                display: inline-block;
             }
             .home-ready.good {
                 border: 1px solid rgba(52,211,153,0.35);
@@ -880,6 +883,19 @@ def _prepare_text(
     if redact_enabled:
         text, pii_counts = redact_pii(text)
     return {"text": text, "metadata": doc.metadata, "pii_counts": pii_counts}
+
+
+def _has_nonzero_privacy_redactions(summary: Dict[str, Any]) -> bool:
+    if not isinstance(summary, dict) or not summary:
+        return False
+    for key in ("resume_pii_redacted", "jd_pii_redacted"):
+        counts = summary.get(key, {})
+        if isinstance(counts, dict):
+            for value in counts.values():
+                if isinstance(value, (int, float)) and value > 0:
+                    return True
+    return False
+
 
 def run_analysis(
     resume_text: str,
@@ -1755,7 +1771,13 @@ def render_single_results(
             for bullet in rewrite.get("rewritten_bullets", []):
                 st.markdown(f"- {bullet}")
         st.markdown("#### Interactive Diff")
-        components.html(rewrite.get("diff_html", "<p>No diff available.</p>"), height=420, scrolling=True)
+        diff_rows = max(
+            len(rewrite.get("original_bullets", []) or []),
+            len(rewrite.get("rewritten_bullets", []) or []),
+            1,
+        )
+        diff_height = min(1100, max(340, 140 + diff_rows * 95))
+        components.html(rewrite.get("diff_html", "<p>No diff available.</p>"), height=diff_height, scrolling=True)
 
     with tabs[5]:
         st.markdown("#### 30-Day Gap-to-Action Plan")
@@ -2042,9 +2064,9 @@ def main() -> None:
                 <div class="home-title">{home_title}</div>
                 <div class="home-sub">{home_sub}</div>
                 <div class="home-steps">
-                    <span class="home-step"><span class="home-step-num">1</span><span>Upload Resume</span></span>
-                    <span class="home-step"><span class="home-step-num">2</span><span>{step_2}</span></span>
-                    <span class="home-step"><span class="home-step-num">3</span><span>{step_3}</span></span>
+                    <span class="home-step"><span class="home-step-num">1</span><span class="home-step-label">Upload Resume</span></span>
+                    <span class="home-step"><span class="home-step-num">2</span><span class="home-step-label">{step_2}</span></span>
+                    <span class="home-step"><span class="home-step-num">3</span><span class="home-step-label">{step_3}</span></span>
                 </div>
             </div>
             """,
@@ -2156,9 +2178,9 @@ def main() -> None:
                 <div class="home-title">{adv_title}</div>
                 <div class="home-sub">{adv_sub}</div>
                 <div class="home-steps">
-                    <span class="home-step"><span class="home-step-num">1</span><span>Configure Sidebar Settings</span></span>
-                    <span class="home-step"><span class="home-step-num">2</span><span>{adv_step_2}</span></span>
-                    <span class="home-step"><span class="home-step-num">3</span><span>Run and Review Analysis Tabs</span></span>
+                    <span class="home-step"><span class="home-step-num">1</span><span class="home-step-label">Set Analysis Options</span></span>
+                    <span class="home-step"><span class="home-step-num">2</span><span class="home-step-label">{adv_step_2}</span></span>
+                    <span class="home-step"><span class="home-step-num">3</span><span class="home-step-label">Run and Review Results</span></span>
                 </div>
             </div>
             """,
@@ -2384,7 +2406,9 @@ def main() -> None:
                     st.session_state.resume_health_results = health_results
                     st.session_state.analysis_results = None
                     st.session_state.batch_results = None
-                    st.session_state.privacy_summary = health_results["privacy"]
+                    st.session_state.privacy_summary = (
+                        health_results["privacy"] if _has_nonzero_privacy_redactions(health_results["privacy"]) else {}
+                    )
                     st.session_state.resume_pdf_bytes = resume_pdf_bytes
                     st.session_state.jd_pdf_bytes = None
                     st.success("Resume health analysis complete.")
@@ -2459,7 +2483,9 @@ def main() -> None:
                         st.session_state.analysis_results = analysis
                         st.session_state.resume_health_results = None
                         st.session_state.batch_results = None
-                        st.session_state.privacy_summary = analysis["privacy"]
+                        st.session_state.privacy_summary = (
+                            analysis["privacy"] if _has_nonzero_privacy_redactions(analysis["privacy"]) else {}
+                        )
                         st.session_state.resume_pdf_bytes = resume_pdf_bytes
 
                         st.success("Single resume analysis complete.")
@@ -2656,9 +2682,9 @@ def main() -> None:
                             st.session_state.get("resume_pdf_bytes"),
                         )
                         privacy_summary = st.session_state.privacy_summary or {}
-                        if privacy_summary:
-                            st.markdown("#### Privacy Summary")
-                            st.json(privacy_summary)
+                        if _has_nonzero_privacy_redactions(privacy_summary):
+                            with st.expander("Privacy Redaction Summary", expanded=False):
+                                st.json(privacy_summary)
                 else:
                     if not st.session_state.analysis_results:
                         st.info("No analysis yet. Submit resume and JD to generate results.")
@@ -2670,9 +2696,9 @@ def main() -> None:
                             simple_mode=False,
                         )
                         privacy_summary = st.session_state.privacy_summary or {}
-                        if privacy_summary:
-                            st.markdown("#### Privacy Summary")
-                            st.json(privacy_summary)
+                        if _has_nonzero_privacy_redactions(privacy_summary):
+                            with st.expander("Privacy Redaction Summary", expanded=False):
+                                st.json(privacy_summary)
             else:
                 if not st.session_state.batch_results:
                     st.info("No batch output yet. Upload resumes and run screening.")
