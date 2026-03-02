@@ -1151,16 +1151,120 @@ def render_resume_health_results(results: Dict[str, Any]) -> None:
     overall = float(hm.get("overall", 0))
     suggestions_payload = results.get("suggestions_payload", {})
     suggestions = suggestions_payload.get("suggestions", [])
+    section_score = float(hm.get("section_score", 0))
+    contact_score = float(hm.get("contact_score", 0))
+    quantification_score = float(hm.get("quantification_score", 0))
+    bullet_score = float(hm.get("bullet_score", 0))
+    sections_presence = results.get("sections_presence", {})
+    missing_sections = sum(1 for present in sections_presence.values() if not present)
+
+    score_sections = [
+        {
+            "name": "Section Quality",
+            "score": section_score,
+            "issues": missing_sections if missing_sections > 0 else (1 if section_score < 70 else 0),
+            "hint": "Use standard headings: Summary, Experience, Skills, Projects, Education.",
+        },
+        {
+            "name": "Contact Completeness",
+            "score": contact_score,
+            "issues": 0 if contact_score >= 95 else 1,
+            "hint": "Keep email, phone, and LinkedIn clear in the header.",
+        },
+        {
+            "name": "Quantified Impact",
+            "score": quantification_score,
+            "issues": 0 if quantification_score >= 70 else 1,
+            "hint": "Add numbers in bullets: %, time saved, revenue, or scale.",
+        },
+        {
+            "name": "Bullet Quality",
+            "score": bullet_score,
+            "issues": 0 if bullet_score >= 70 else 1,
+            "hint": "Use concise action-result bullets for ATS and recruiter readability.",
+        },
+    ]
+    total_issues = sum(section["issues"] for section in score_sections)
 
     st.markdown("### Resume Health Report")
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("Resume Score", f"{overall:.2f}%")
-    m2.metric("Section Quality", f"{hm.get('section_score', 0):.2f}%")
-    m3.metric("Contact Completeness", f"{hm.get('contact_score', 0):.2f}%")
-    m4.metric("Quantified Impact", f"{hm.get('quantification_score', 0):.2f}%")
-    m5.metric("Bullet Quality", f"{hm.get('bullet_score', 0):.2f}%")
-    st.progress(min(max(overall / 100, 0.0), 1.0))
-    st.caption(f"Word Count: {hm.get('word_count', 0)} | Skill Visibility: {hm.get('skill_spread_score', 0):.2f}%")
+    left_col, right_col = st.columns([1.0, 2.2], gap="large")
+
+    with left_col:
+        ring_value = min(max(overall, 0.0), 100.0)
+        ring_degrees = int(round((ring_value / 100.0) * 360))
+        section_rows: List[str] = []
+        for section in score_sections:
+            tone = _score_tone(section["score"])
+            icon = _status_icon(section["score"])
+            issue_word = "issue" if section["issues"] == 1 else "issues"
+            section_rows.append(
+                f'<div class="eh-cat-row">'
+                f'<span class="eh-cat-name">{icon} {section["name"]}</span>'
+                f'<span class="badge {tone}">{section["score"]:.0f}%</span>'
+                f"</div>"
+                f'<div class="eh-cat-meta">{section["issues"]} {issue_word} | {_item_status(section["score"])}</div>'
+            )
+
+        st.markdown(
+            (
+                f'<div class="eh-side-card">'
+                f'<div class="eh-side-title">Your Score</div>'
+                f'<div class="eh-score-ring" style="background: conic-gradient(#22d3ee {ring_degrees}deg, rgba(255,255,255,0.12) 0deg);">'
+                f'<div class="eh-score-ring-inner">{ring_value:.0f}<span>/100</span></div>'
+                f"</div>"
+                f'<div class="eh-issues">{total_issues} issues found</div>'
+                f'<div class="eh-divider"></div>'
+                f"{''.join(section_rows)}"
+                f"</div>"
+            ),
+            unsafe_allow_html=True,
+        )
+
+    with right_col:
+        flow_rows = [
+            ("OK", "Parsing your resume", True),
+            ("OK", "Reviewing structure and sections", True),
+            ("OK", "Checking skills and impact quality", True),
+            ("OK" if suggestions else "WARN", "Generating recommendations", bool(suggestions)),
+        ]
+        flow_html = "".join(
+            f'<div class="eh-flow-item{" dim" if not done else ""}">{icon} {label}</div>'
+            for icon, label, done in flow_rows
+        )
+        st.markdown(
+            f"""
+            <div class="eh-flow-card">
+                {flow_html}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        metric_cols = st.columns(4)
+        metric_cols[0].metric("Resume Score", f"{overall:.2f}%")
+        metric_cols[1].metric("Section Quality", f"{section_score:.2f}%")
+        metric_cols[2].metric("Contact", f"{contact_score:.2f}%")
+        metric_cols[3].metric("Impact", f"{quantification_score:.2f}%")
+        st.progress(min(max(overall / 100, 0.0), 1.0))
+        st.caption(
+            f"Word Count: {hm.get('word_count', 0)} | Skill Visibility: {hm.get('skill_spread_score', 0):.2f}% | Bullet Quality: {bullet_score:.2f}%"
+        )
+
+        for section in score_sections:
+            tone = _score_tone(section["score"])
+            with st.container(border=True):
+                c1, c2 = st.columns([4.0, 1.1])
+                c1.markdown(f"<div class='eh-item-title'>{section['name']}</div>", unsafe_allow_html=True)
+                c1.markdown(
+                    f"<div class='eh-item-status'>{_status_icon(section['score'])} {_item_status(section['score'])}</div>",
+                    unsafe_allow_html=True,
+                )
+                c2.markdown(
+                    f"<span class='badge {tone}'>{section['score']:.0f}%</span>",
+                    unsafe_allow_html=True,
+                )
+                st.progress(min(max(section["score"] / 100.0, 0.0), 1.0))
+                st.markdown(f"<div class='hint-note'>{section['hint']}</div>", unsafe_allow_html=True)
 
     tabs = st.tabs(["Fixes", "Suggestions", "Structure"])
 
