@@ -1887,43 +1887,14 @@ def main() -> None:
 
             role_template_name = st.selectbox("Role Template", get_role_template_names(), index=0)
             st.caption(get_role_template(role_template_name).get("description", ""))
+            st.caption("Input files are on the main page below.")
 
-            st.markdown("### Inputs")
             if st.session_state.use_sample:
                 if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
                     st.info("Sample mode is ON. Built-in resume will be used.")
                 else:
                     st.info("Sample mode is ON. Built-in resume and JD will be used.")
                 st.caption("Switch Input Source to `Live Upload/Paste` to use your own files.")
-            else:
-                if analysis_mode == "Single Resume":
-                    resume_pdf = st.file_uploader("Resume PDF", type=["pdf"], accept_multiple_files=False)
-                    resume_pdfs = []
-                    if screening_mode == "JD Match":
-                        jd_mode = st.radio("Job Description Input", ["Paste Text", "Upload File"], index=0)
-                        if jd_mode == "Paste Text":
-                            jd_pasted = st.text_area("Paste Job Description", height=220)
-                        else:
-                            jd_upload = st.file_uploader("Upload JD (PDF or TXT)", type=["pdf", "txt"])
-                    else:
-                        role_hint = st.text_input(
-                            "Role Hint (Optional)",
-                            value="",
-                            placeholder="Example: Data Scientist, Backend Engineer, AI Engineer",
-                        )
-                else:
-                    resume_pdfs = st.file_uploader(
-                        "Upload Resume PDFs",
-                        type=["pdf"],
-                        accept_multiple_files=True,
-                        help="Batch mode ranks multiple candidates against one JD.",
-                    )
-                    resume_pdf = None
-                    jd_mode = st.radio("Job Description Input", ["Paste Text", "Upload File"], index=0)
-                    if jd_mode == "Paste Text":
-                        jd_pasted = st.text_area("Paste Job Description", height=220)
-                    else:
-                        jd_upload = st.file_uploader("Upload JD (PDF or TXT)", type=["pdf", "txt"])
 
             with st.expander("LLM Suggestions", expanded=True):
                 llm_mode = st.radio("Suggestion Engine", ["Auto (Groq if key)", "Rule-based only"], index=0)
@@ -2071,7 +2042,7 @@ def main() -> None:
                 <div class="home-title">{adv_title}</div>
                 <div class="home-sub">{adv_sub}</div>
                 <div class="home-steps">
-                    <span class="home-step"><span class="home-step-num">1</span><span>Configure Sidebar Inputs</span></span>
+                    <span class="home-step"><span class="home-step-num">1</span><span>Configure Sidebar Settings</span></span>
                     <span class="home-step"><span class="home-step-num">2</span><span>{adv_step_2}</span></span>
                     <span class="home-step"><span class="home-step-num">3</span><span>Run and Review Analysis Tabs</span></span>
                 </div>
@@ -2079,6 +2050,143 @@ def main() -> None:
             """,
             unsafe_allow_html=True,
         )
+
+        if st.session_state.use_sample:
+            if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
+                st.markdown(
+                    "<div class='home-ready good'>Sample mode active. Built-in resume will be analyzed when you click Analyze.</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    "<div class='home-ready good'>Sample mode active. Built-in inputs will be analyzed when you click Analyze.</div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            if analysis_mode == "Single Resume" and screening_mode == "JD Match":
+                i1, i2 = st.columns([1, 1], gap="large")
+                with i1:
+                    with st.container(border=True):
+                        st.markdown("#### Resume")
+                        st.caption("Upload one resume PDF (max 20MB).")
+                        resume_pdf = st.file_uploader(
+                            "Upload Resume PDF",
+                            type=["pdf"],
+                            accept_multiple_files=False,
+                            key="adv_main_resume_pdf",
+                        )
+                with i2:
+                    with st.container(border=True):
+                        st.markdown("#### Job Description")
+                        jd_mode_pick = st.radio(
+                            "JD Input Type",
+                            ["Paste Text", "Upload File"],
+                            horizontal=True,
+                            key="adv_main_jd_mode_pick",
+                        )
+                        if jd_mode_pick == "Upload File":
+                            jd_mode = "Upload File"
+                            jd_upload = st.file_uploader(
+                                "Upload JD (PDF or TXT)",
+                                type=["pdf", "txt"],
+                                key="adv_main_jd_upload",
+                            )
+                        else:
+                            jd_mode = "Paste Text"
+                            jd_pasted = st.text_area(
+                                "Paste Job Description",
+                                height=190,
+                                key="adv_main_jd_pasted",
+                                placeholder="Paste the full job description here...",
+                            )
+
+                resume_ready = bool(resume_pdf)
+                jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
+                ready_cls = "good" if (resume_ready and jd_ready) else "warn"
+                ready_text = (
+                    "Inputs ready. Click Analyze."
+                    if (resume_ready and jd_ready)
+                    else "Upload both Resume and JD to enable a full analysis."
+                )
+                st.markdown(f"<div class='home-ready {ready_cls}'>{ready_text}</div>", unsafe_allow_html=True)
+
+            elif analysis_mode == "Single Resume":
+                i1, i2 = st.columns([1.35, 1], gap="large")
+                with i1:
+                    with st.container(border=True):
+                        st.markdown("#### Resume")
+                        st.caption("Upload one resume PDF (max 20MB).")
+                        resume_pdf = st.file_uploader(
+                            "Upload Resume PDF",
+                            type=["pdf"],
+                            accept_multiple_files=False,
+                            key="adv_main_resume_pdf_health",
+                        )
+                with i2:
+                    with st.container(border=True):
+                        st.markdown("#### Target Role (Optional)")
+                        role_hint = st.text_input(
+                            "Role Hint",
+                            value="",
+                            key="adv_main_role_hint",
+                            placeholder="Example: Data Scientist, Backend Engineer, AI Engineer",
+                        )
+                        st.caption("Used to tailor resume-only suggestions.")
+
+                ready_cls = "good" if bool(resume_pdf) else "warn"
+                ready_text = (
+                    "Resume ready. Click Analyze."
+                    if bool(resume_pdf)
+                    else "Upload a resume PDF to run Resume Health mode."
+                )
+                st.markdown(f"<div class='home-ready {ready_cls}'>{ready_text}</div>", unsafe_allow_html=True)
+
+            else:
+                i1, i2 = st.columns([1, 1], gap="large")
+                with i1:
+                    with st.container(border=True):
+                        st.markdown("#### Resumes")
+                        st.caption("Upload multiple resume PDFs for batch screening.")
+                        resume_pdfs = st.file_uploader(
+                            "Upload Resume PDFs",
+                            type=["pdf"],
+                            accept_multiple_files=True,
+                            key="adv_main_resume_pdfs_batch",
+                        )
+                with i2:
+                    with st.container(border=True):
+                        st.markdown("#### Job Description")
+                        jd_mode_pick = st.radio(
+                            "JD Input Type",
+                            ["Paste Text", "Upload File"],
+                            horizontal=True,
+                            key="adv_main_batch_jd_mode_pick",
+                        )
+                        if jd_mode_pick == "Upload File":
+                            jd_mode = "Upload File"
+                            jd_upload = st.file_uploader(
+                                "Upload JD (PDF or TXT)",
+                                type=["pdf", "txt"],
+                                key="adv_main_batch_jd_upload",
+                            )
+                        else:
+                            jd_mode = "Paste Text"
+                            jd_pasted = st.text_area(
+                                "Paste Job Description",
+                                height=190,
+                                key="adv_main_batch_jd_pasted",
+                                placeholder="Paste the full job description here...",
+                            )
+
+                resume_ready = bool(resume_pdfs)
+                jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
+                ready_cls = "good" if (resume_ready and jd_ready) else "warn"
+                ready_text = (
+                    "Inputs ready. Click Analyze."
+                    if (resume_ready and jd_ready)
+                    else "Upload resumes and JD to enable batch screening."
+                )
+                st.markdown(f"<div class='home-ready {ready_cls}'>{ready_text}</div>", unsafe_allow_html=True)
 
     def _jd_input_ready() -> bool:
         return bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
@@ -2386,22 +2494,22 @@ def main() -> None:
                     with c1:
                         with st.container(border=True):
                             st.markdown("#### Resume Input")
-                            if resume_ready:
-                                st.success("Ready")
+                        if resume_ready:
+                            st.success("Ready")
+                        else:
+                            st.info("Waiting for resume upload")
+                            if analysis_mode == "Single Resume":
+                                st.caption("Upload one resume PDF in the input section above.")
                             else:
-                                st.info("Waiting for resume upload")
-                                if analysis_mode == "Single Resume":
-                                    st.caption("Upload one resume PDF in the sidebar.")
-                                else:
-                                    st.caption("Upload one or more resume PDFs in the sidebar.")
+                                st.caption("Upload one or more resume PDFs in the input section above.")
                     with c2:
                         with st.container(border=True):
                             st.markdown("#### JD Input")
-                            if jd_ready:
-                                st.success("Ready")
-                            else:
-                                st.info("Waiting for job description")
-                                st.caption("Paste JD text or upload a JD file in the sidebar.")
+                        if jd_ready:
+                            st.success("Ready")
+                        else:
+                            st.info("Waiting for job description")
+                            st.caption("Paste JD text or upload a JD file in the input section above.")
 
                     if not resume_ready or not jd_ready:
                         missing_parts = []
