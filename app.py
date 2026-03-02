@@ -1183,7 +1183,7 @@ def run_resume_health_analysis(
     }
 
 
-def render_resume_health_results(results: Dict[str, Any]) -> None:
+def render_resume_health_results(results: Dict[str, Any], resume_pdf_bytes: bytes | None = None) -> None:
     hm = results.get("health_metrics", {})
     overall = float(hm.get("overall", 0))
     suggestions_payload = results.get("suggestions_payload", {})
@@ -1303,19 +1303,38 @@ def render_resume_health_results(results: Dict[str, Any]) -> None:
                 st.progress(min(max(section["score"] / 100.0, 0.0), 1.0))
                 st.markdown(f"<div class='hint-note'>{section['hint']}</div>", unsafe_allow_html=True)
 
-    tabs = st.tabs(["Fixes", "Suggestions", "Structure"])
+    resume_skills = format_skill_list(results.get("resume_skills", []))
+    quality_gaps = format_skill_list(results.get("quality_gaps", []))
+    fixes = results.get("fixes", [])
+    strong_points = results.get("strong_points", [])
+    role_hint = (results.get("role_hint") or "General").strip() or "General"
+    observability = results.get("observability", {})
+    resume_text = results.get("resume_text", "")
+
+    tabs = st.tabs(
+        [
+            "Overview",
+            "Section Scores",
+            "JD Requirements",
+            "Skills & ATS",
+            "Rewriter Diff",
+            "Action Plan + Tailored Draft",
+            "Explainability + Fairness",
+            "PDF + Highlights",
+            "Observability",
+        ]
+    )
 
     with tabs[0]:
         st.markdown("#### Top Fixes")
-        for idx, fix in enumerate(results.get("fixes", []), start=1):
+        for idx, fix in enumerate(fixes, start=1):
             st.markdown(f"{idx}. {fix}")
         st.markdown("#### Strong Points")
-        for point in results.get("strong_points", []):
+        for point in strong_points:
             st.markdown(f"- {point}")
 
-    with tabs[1]:
-        provider = suggestions_payload.get("provider", "unknown")
         st.markdown("#### Personalized Suggestions")
+        provider = suggestions_payload.get("provider", "unknown")
         st.caption(f"Suggestion source: `{provider}`")
         if provider == "rule-based":
             diagnostics = suggestions_payload.get("diagnostics", {})
@@ -1325,12 +1344,112 @@ def render_resume_health_results(results: Dict[str, Any]) -> None:
         for idx, suggestion in enumerate(suggestions or ["No suggestions generated."], start=1):
             st.markdown(f"{idx}. {suggestion}")
 
-        render_copy_suggestions_widget(suggestions or ["No suggestions generated."], key_suffix="resume_health")
+        render_copy_suggestions_widget(suggestions or ["No suggestions generated."], key_suffix="resume_health_full")
+        render_next_steps_checklist(quality_gaps, target_score=75.0, key_prefix="resume_health")
+
+    with tabs[1]:
+        section_df = pd.DataFrame(
+            [
+                {
+                    "section": section["name"],
+                    "score": round(float(section["score"]), 2),
+                    "issues": int(section["issues"]),
+                    "status": _item_status(float(section["score"])),
+                }
+                for section in score_sections
+            ]
+        )
+        st.dataframe(section_df, use_container_width=True, hide_index=True)
+        st.bar_chart(section_df.set_index("section")[["score"]])
+
+        presence = results.get("sections_presence", {})
+        if presence:
+            st.markdown("#### Section Presence")
+            rows = [{"section": key.title(), "present": "Yes" if value else "No"} for key, value in presence.items()]
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    with tabs[2]:
+        st.markdown("#### Requirement-Style Gap View (Resume Health)")
+        req_rows = [{"requirement": gap, "category": "Resume Quality Gap", "status": "Needs Work"} for gap in quality_gaps]
+        req_df = pd.DataFrame(req_rows)
+        if req_df.empty:
+            st.caption("No critical gaps detected in resume-only mode.")
+        else:
+            st.dataframe(req_df, use_container_width=True, hide_index=True)
+            st.metric("Gap Coverage", f"{max(0.0, 100.0 - (len(req_rows) * 12.5)):.2f}%")
+        st.caption("For strict JD requirement coverage, run JD Match mode.")
+
+    with tabs[3]:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("#### Detected Skills")
+            render_skill_pills(resume_skills)
+        with c2:
+            st.markdown("#### Missing Focus Areas")
+            render_skill_pills(quality_gaps)
+
+        st.markdown("#### ATS Components")
+        ats_proxy = {
+            "Keyword alignment": float(hm.get("skill_spread_score", 0)),
+            "Section completeness": section_score,
+            "Contact completeness": contact_score,
+            "Length quality": float(hm.get("length_score", 0)),
+            "Bullet formatting": bullet_score,
+        }
+        for label, value in ats_proxy.items():
+            st.caption(label)
+            st.progress(min(max(value / 100, 0.0), 1.0))
+
+        st.markdown("#### ATS Tips")
+        for tip in fixes[:5]:
+            st.markdown(f"- {tip}")
+
+    with tabs[4]:
+        st.markdown("#### Rewriter Diff")
+        st.info("Resume Health mode does not run JD-based bullet rewrite diff.")
+        st.caption("Use JD Match mode to see original vs rewritten bullets and interactive diff.")
+
+    with tabs[5]:
+        st.markdown("#### 30-Day Gap-to-Action Plan")
+        plan_rows = build_30_day_plan(quality_gaps, role_hint)
+        st.dataframe(pd.DataFrame(plan_rows), use_container_width=True, hide_index=True)
+
+        st.markdown("#### Tailored Resume Draft (Resume Health)")
+        summary_skills = ", ".join(resume_skills[:10]) if resume_skills else "Add role-relevant skills"
+        draft_md = (
+            f"# Tailored Resume Draft ({role_hint})\n\n"
+            "## Professional Summary\n"
+            "Results-driven professional focused on measurable impact, ATS-friendly structure, and role alignment.\n\n"
+            "## Core Skills\n"
+            f"{summary_skills}\n\n"
+            "## Priority Improvements\n"
+            + "\n".join(f"- {fix}" for fix in fixes[:6])
+        )
+        st.text_area("Tailored Draft (ATS-safe)", value=draft_md, height=260)
+        draft_pdf = markdown_to_pdf_bytes(draft_md)
+        d1, d2 = st.columns(2)
+        with d1:
+            st.download_button(
+                "Download Tailored Draft (Markdown)",
+                data=draft_md,
+                file_name="resume_health_tailored_draft.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with d2:
+            st.download_button(
+                "Download Tailored Draft (PDF)",
+                data=draft_pdf,
+                file_name="resume_health_tailored_draft.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
         report_md = build_suggestions_markdown(
             match_score=overall,
-            matching_skills=format_skill_list(results.get("resume_skills", [])[:10]),
-            missing_skills=format_skill_list(results.get("quality_gaps", [])),
-            strong_points=results.get("strong_points", []),
+            matching_skills=resume_skills[:10],
+            missing_skills=quality_gaps,
+            strong_points=strong_points,
             suggestions=suggestions or ["Prioritize measurable impact and ATS-safe formatting."],
             ats_score=float(hm.get("section_score", 0)),
         )
@@ -1343,13 +1462,62 @@ def render_resume_health_results(results: Dict[str, Any]) -> None:
             use_container_width=True,
         )
 
-    with tabs[2]:
-        presence = results.get("sections_presence", {})
-        if presence:
-            rows = [{"section": key.title(), "present": "Yes" if value else "No"} for key, value in presence.items()]
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        st.markdown("#### Detected Skills")
-        render_skill_pills(format_skill_list(results.get("resume_skills", [])))
+    with tabs[6]:
+        st.markdown("#### Feature Contribution Breakdown")
+        contribution_rows = [
+            {"feature": "Section Quality", "weight": 0.28, "score": section_score},
+            {"feature": "Contact Completeness", "weight": 0.20, "score": contact_score},
+            {"feature": "Quantified Impact", "weight": 0.22, "score": quantification_score},
+            {"feature": "Bullet Quality", "weight": 0.15, "score": bullet_score},
+            {"feature": "Skill Visibility", "weight": 0.15, "score": float(hm.get("skill_spread_score", 0))},
+        ]
+        st.dataframe(pd.DataFrame(contribution_rows), use_container_width=True, hide_index=True)
+
+        st.markdown("#### Evidence")
+        for point in strong_points:
+            st.markdown(f"- {point}")
+        for fix in fixes[:3]:
+            st.markdown(f"- Improvement signal: {fix}")
+
+        st.markdown("#### Fairness and Bias Checks")
+        fairness = analyze_bias_risks(resume_text)
+        if fairness["risk_count"] > 0:
+            st.warning(f"Detected {fairness['risk_count']} potential fairness/compliance flags.")
+            for finding in fairness["findings"]:
+                st.markdown(f"- {finding}")
+        else:
+            st.success("No major fairness risks detected.")
+        st.markdown("#### Recommendations")
+        for rec in fairness["recommendations"]:
+            st.markdown(f"- {rec}")
+
+    with tabs[7]:
+        render_pdf_preview(resume_pdf_bytes, "Resume PDF Preview")
+
+        keyword_options = sorted(set(resume_skills + quality_gaps))
+        if not keyword_options:
+            keyword_options = ["python"]
+
+        selected_keyword = st.selectbox("Keyword Highlights", keyword_options, key="resume_health_keyword")
+        snippets = highlight_keyword_snippets(resume_text, selected_keyword)
+        st.markdown("#### Resume Snippets")
+        if snippets:
+            for snippet in snippets:
+                st.markdown(snippet, unsafe_allow_html=True)
+        else:
+            st.caption("No snippet found for selected keyword.")
+
+    with tabs[8]:
+        st.markdown("#### Latency Metrics")
+        timing_df = pd.DataFrame(observability.get("stage_timings", []))
+        if not timing_df.empty:
+            st.dataframe(timing_df, use_container_width=True, hide_index=True)
+        st.metric("Total Latency", f"{observability.get('total_elapsed_ms', 0)} ms")
+        st.markdown("#### LLM Usage")
+        u1, u2, u3 = st.columns(3)
+        u1.metric("Prompt Tokens", observability.get("llm_prompt_tokens", 0))
+        u2.metric("Completion Tokens", observability.get("llm_completion_tokens", 0))
+        u3.metric("Estimated Cost (USD)", observability.get("llm_estimated_cost_usd", 0.0))
 
 
 def run_batch_analysis(
@@ -1478,79 +1646,6 @@ def render_single_results(
             f"Role Template: **{results.get('role_template', 'General')}**"
         )
 
-    if simple_mode:
-        tab_labels = ["Summary", "Skills Gap", "Suggestions"]
-        tab_objs = st.tabs(tab_labels)
-        tab_map = {name: tab for name, tab in zip(tab_labels, tab_objs)}
-
-        with tab_map["Summary"]:
-            render_interactive_audit_report(results)
-            st.markdown("#### Strong Points")
-            for point in strong_points[:3]:
-                st.markdown(f"- {point}")
-            st.markdown("#### Score Breakdown")
-            sb1, sb2, sb3 = st.columns(3)
-            sb1.metric("Semantic", f"{score['semantic']}%")
-            sb2.metric("Lexical", f"{score['lexical']}%")
-            sb3.metric("Confidence", f"{confidence['confidence_pct']}%")
-
-        with tab_map["Skills Gap"]:
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("#### Matching Skills")
-                render_skill_pills(format_skill_list(skills["matching_skills"]))
-            with c2:
-                st.markdown("#### Missing Skills")
-                render_skill_pills(format_skill_list(skills["missing_skills"]))
-            st.markdown("#### ATS Tips")
-            for tip in ats["tips"][:4]:
-                st.markdown(f"- {tip}")
-
-        with tab_map["Suggestions"]:
-            st.markdown("#### Personalized Suggestions")
-            provider = suggestions_payload.get("provider", "unknown")
-            st.caption(f"Suggestion source: `{provider}`")
-            if provider == "rule-based":
-                st.warning("LLM call failed for this run. Showing fallback suggestions.")
-                diagnostics = suggestions_payload.get("diagnostics", {})
-                with st.expander("LLM Diagnostics", expanded=False):
-                    st.json(diagnostics)
-            for idx, suggestion in enumerate(suggestions or ["No suggestions generated in this mode."], start=1):
-                st.markdown(f"{idx}. {suggestion}")
-
-            render_copy_suggestions_widget(suggestions or ["No suggestions generated in this mode."], key_suffix="simple")
-            render_next_steps_checklist(format_skill_list(skills["missing_skills"]), key_prefix="simple")
-
-            report_md = build_suggestions_markdown(
-                match_score=score["overall"],
-                matching_skills=format_skill_list(skills["matching_skills"]),
-                missing_skills=format_skill_list(skills["missing_skills"]),
-                strong_points=strong_points,
-                suggestions=suggestions or ["Use the planner to close top skill gaps."],
-                ats_score=ats["ats_score"],
-            )
-            report_pdf = markdown_to_pdf_bytes(report_md)
-
-            d1, d2 = st.columns(2)
-            with d1:
-                st.download_button(
-                    "Download Suggestions (PDF)",
-                    data=report_pdf,
-                    file_name="improvement_report.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
-            with d2:
-                st.download_button(
-                    "Download Tailored Draft (Markdown)",
-                    data=tailored_draft,
-                    file_name="tailored_resume_draft.md",
-                    mime="text/markdown",
-                    use_container_width=True,
-                )
-
-        return
-
     tabs = st.tabs(
         [
             "Overview",
@@ -1566,15 +1661,30 @@ def render_single_results(
     )
 
     with tabs[0]:
+        if simple_mode:
+            render_interactive_audit_report(results)
         st.markdown("#### Strong Points")
         for point in strong_points:
             st.markdown(f"- {point}")
         st.markdown("#### Personalized Suggestions")
-        st.caption(f"Suggestion source: `{suggestions_payload.get('provider', 'unknown')}`")
+        provider = suggestions_payload.get("provider", "unknown")
+        st.caption(f"Suggestion source: `{provider}`")
+        if provider == "rule-based":
+            st.warning("LLM call failed for this run. Showing fallback suggestions.")
+            diagnostics = suggestions_payload.get("diagnostics", {})
+            if diagnostics:
+                with st.expander("LLM Diagnostics", expanded=False):
+                    st.json(diagnostics)
         for idx, suggestion in enumerate(suggestions or ["No suggestions generated in this mode."], start=1):
             st.markdown(f"{idx}. {suggestion}")
-        render_copy_suggestions_widget(suggestions or ["No suggestions generated in this mode."], key_suffix="advanced")
-        render_next_steps_checklist(format_skill_list(skills["missing_skills"]))
+        render_copy_suggestions_widget(
+            suggestions or ["No suggestions generated in this mode."],
+            key_suffix="simple" if simple_mode else "advanced",
+        )
+        render_next_steps_checklist(
+            format_skill_list(skills["missing_skills"]),
+            key_prefix="simple" if simple_mode else "advanced",
+        )
 
     with tabs[1]:
         section_df = pd.DataFrame(section_scores)
@@ -2411,7 +2521,10 @@ def main() -> None:
             if not st.session_state.resume_health_results:
                 st.caption("Upload a resume and click Analyze to see resume quality score and fixes.")
             else:
-                render_resume_health_results(st.session_state.resume_health_results)
+                render_resume_health_results(
+                    st.session_state.resume_health_results,
+                    st.session_state.get("resume_pdf_bytes"),
+                )
         else:
             if not st.session_state.analysis_results:
                 st.caption("Fill the home inputs above, then click Analyze.")
@@ -2527,7 +2640,10 @@ def main() -> None:
                     if not st.session_state.resume_health_results:
                         st.info("No analysis yet. Submit a resume to generate Resume Health results.")
                     else:
-                        render_resume_health_results(st.session_state.resume_health_results)
+                        render_resume_health_results(
+                            st.session_state.resume_health_results,
+                            st.session_state.get("resume_pdf_bytes"),
+                        )
                         privacy_summary = st.session_state.privacy_summary or {}
                         if privacy_summary:
                             st.markdown("#### Privacy Summary")
