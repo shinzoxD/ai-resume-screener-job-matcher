@@ -1498,14 +1498,15 @@ def render_resume_health_results(results: Dict[str, Any], resume_pdf_bytes: byte
         if not keyword_options:
             keyword_options = ["python"]
 
-        selected_keyword = st.selectbox("Keyword Highlights", keyword_options, key="resume_health_keyword")
+        selected_keyword = st.selectbox("Keyword Evidence", keyword_options, key="resume_health_keyword")
         snippets = highlight_keyword_snippets(resume_text, selected_keyword)
-        st.markdown("#### Resume Snippets")
+        st.markdown("#### Keyword Evidence in Resume")
+        st.caption("These are extracted text snippets where the selected keyword appears in your resume.")
         if snippets:
             for snippet in snippets:
                 st.markdown(snippet, unsafe_allow_html=True)
         else:
-            st.caption("No snippet found for selected keyword.")
+            st.caption("No evidence snippet found for selected keyword.")
 
     with tabs[8]:
         st.markdown("#### Latency Metrics")
@@ -1830,22 +1831,24 @@ def render_single_results(
         if not keyword_options:
             keyword_options = [row["keyword"] for row in keyword_rows][:12]
 
-        selected_keyword = st.selectbox("Keyword Highlights", keyword_options or ["python"])
-        st.markdown("#### Resume Snippets")
+        selected_keyword = st.selectbox("Keyword Evidence", keyword_options or ["python"])
+        st.markdown("#### Keyword Evidence in Resume")
+        st.caption("These snippets show where the selected keyword appears in your resume text.")
         resume_snippets = highlight_keyword_snippets(results.get("resume_text", ""), selected_keyword)
         if resume_snippets:
             for snippet in resume_snippets:
                 st.markdown(snippet, unsafe_allow_html=True)
         else:
-            st.caption("No resume snippet found for selected keyword.")
+            st.caption("No resume evidence found for selected keyword.")
 
-        st.markdown("#### JD Snippets")
+        st.markdown("#### Keyword Evidence in Job Description")
+        st.caption("These snippets show where the selected keyword appears in the job description.")
         jd_snippets = highlight_keyword_snippets(results.get("jd_text", ""), selected_keyword)
         if jd_snippets:
             for snippet in jd_snippets:
                 st.markdown(snippet, unsafe_allow_html=True)
         else:
-            st.caption("No JD snippet found for selected keyword.")
+            st.caption("No job-description evidence found for selected keyword.")
 
     with tabs[8]:
         st.markdown("#### Latency Metrics")
