@@ -494,13 +494,13 @@ def render_interactive_audit_report(results: Dict[str, Any]) -> None:
         for section in sections:
             tone = _score_tone(section["score"])
             rows_html.append(
-                f"""
-                <div class="section-row">
-                    <span class="label">{section["name"]}</span>
-                    <span class="badge {tone}">{section["score"]:.0f}%</span>
-                </div>
-                <div class="section-sub">{_item_status(section["score"])} | {section["issues"]} issues</div>
-                """
+                (
+                    f'<div class="section-row">'
+                    f'<span class="label">{section["name"]}</span>'
+                    f'<span class="badge {tone}">{section["score"]:.0f}%</span>'
+                    f"</div>"
+                    f'<div class="section-sub">{_item_status(section["score"])} | {section["issues"]} issues</div>'
+                )
             )
         st.markdown(
             f"""
