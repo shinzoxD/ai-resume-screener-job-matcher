@@ -1874,6 +1874,11 @@ def main() -> None:
                 st.warning("Add `GROQ_API_KEY` in Space Secrets to use AI suggestions.")
         else:
             analysis_mode = st.radio("Mode", ["Single Resume", "Batch Screening"], index=0)
+            if analysis_mode == "Single Resume":
+                screening_mode = st.radio("Screening Mode", ["JD Match", "Resume Health"], index=0)
+            else:
+                screening_mode = "JD Match"
+                st.caption("Batch Screening currently runs JD Match mode.")
 
             source_options = ["Live Upload/Paste", "Use Built-in Sample"]
             source_index = 1 if st.session_state.use_sample else 0
@@ -1885,12 +1890,27 @@ def main() -> None:
 
             st.markdown("### Inputs")
             if st.session_state.use_sample:
-                st.info("Sample mode is ON. Built-in resume and JD will be used.")
+                if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
+                    st.info("Sample mode is ON. Built-in resume will be used.")
+                else:
+                    st.info("Sample mode is ON. Built-in resume and JD will be used.")
                 st.caption("Switch Input Source to `Live Upload/Paste` to use your own files.")
             else:
                 if analysis_mode == "Single Resume":
                     resume_pdf = st.file_uploader("Resume PDF", type=["pdf"], accept_multiple_files=False)
                     resume_pdfs = []
+                    if screening_mode == "JD Match":
+                        jd_mode = st.radio("Job Description Input", ["Paste Text", "Upload File"], index=0)
+                        if jd_mode == "Paste Text":
+                            jd_pasted = st.text_area("Paste Job Description", height=220)
+                        else:
+                            jd_upload = st.file_uploader("Upload JD (PDF or TXT)", type=["pdf", "txt"])
+                    else:
+                        role_hint = st.text_input(
+                            "Role Hint (Optional)",
+                            value="",
+                            placeholder="Example: Data Scientist, Backend Engineer, AI Engineer",
+                        )
                 else:
                     resume_pdfs = st.file_uploader(
                         "Upload Resume PDFs",
@@ -1899,12 +1919,11 @@ def main() -> None:
                         help="Batch mode ranks multiple candidates against one JD.",
                     )
                     resume_pdf = None
-
-                jd_mode = st.radio("Job Description Input", ["Paste Text", "Upload File"], index=0)
-                if jd_mode == "Paste Text":
-                    jd_pasted = st.text_area("Paste Job Description", height=220)
-                else:
-                    jd_upload = st.file_uploader("Upload JD (PDF or TXT)", type=["pdf", "txt"])
+                    jd_mode = st.radio("Job Description Input", ["Paste Text", "Upload File"], index=0)
+                    if jd_mode == "Paste Text":
+                        jd_pasted = st.text_area("Paste Job Description", height=220)
+                    else:
+                        jd_upload = st.file_uploader("Upload JD (PDF or TXT)", type=["pdf", "txt"])
 
             with st.expander("LLM Suggestions", expanded=True):
                 llm_mode = st.radio("Suggestion Engine", ["Auto (Groq if key)", "Rule-based only"], index=0)
@@ -2034,16 +2053,18 @@ def main() -> None:
 
             st.markdown(f"<div class='home-ready {ready_cls}'>{ready_text}</div>", unsafe_allow_html=True)
     else:
-        adv_title = (
-            "Advanced Single Resume Analysis"
-            if analysis_mode == "Single Resume"
-            else "Advanced Batch Screening"
-        )
-        adv_sub = (
-            "Use sidebar controls to tune model, reranker, OCR, privacy, and LLM settings before analysis."
-            if analysis_mode == "Single Resume"
-            else "Upload multiple resumes, set strict shortlist thresholds, and rank candidates against one JD."
-        )
+        if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
+            adv_title = "Advanced Resume Health Analysis"
+            adv_sub = "Tune model, OCR, privacy, and LLM settings, then run resume-only quality scoring."
+            adv_step_2 = "Upload Resume"
+        elif analysis_mode == "Single Resume":
+            adv_title = "Advanced JD Match Analysis"
+            adv_sub = "Tune model, reranker, OCR, privacy, and LLM settings before scoring resume vs JD."
+            adv_step_2 = "Upload Resume + JD"
+        else:
+            adv_title = "Advanced Batch Screening"
+            adv_sub = "Upload multiple resumes, set strict shortlist thresholds, and rank candidates against one JD."
+            adv_step_2 = "Upload Resumes + JD"
         st.markdown(
             f"""
             <div class="home-shell">
@@ -2051,7 +2072,7 @@ def main() -> None:
                 <div class="home-sub">{adv_sub}</div>
                 <div class="home-steps">
                     <span class="home-step"><span class="home-step-num">1</span><span>Configure Sidebar Inputs</span></span>
-                    <span class="home-step"><span class="home-step-num">2</span><span>{'Upload Resume + JD' if analysis_mode == "Single Resume" else 'Upload Resumes + JD'}</span></span>
+                    <span class="home-step"><span class="home-step-num">2</span><span>{adv_step_2}</span></span>
                     <span class="home-step"><span class="home-step-num">3</span><span>Run and Review Analysis Tabs</span></span>
                 </div>
             </div>
@@ -2071,7 +2092,10 @@ def main() -> None:
         if st.session_state.use_sample:
             inputs_ready = True
         elif analysis_mode == "Single Resume":
-            inputs_ready = bool(resume_pdf) and _jd_input_ready()
+            if screening_mode == "Resume Health":
+                inputs_ready = bool(resume_pdf)
+            else:
+                inputs_ready = bool(resume_pdf) and _jd_input_ready()
         else:
             inputs_ready = bool(resume_pdfs) and _jd_input_ready()
 
@@ -2082,9 +2106,15 @@ def main() -> None:
             else "Run Resume Health Analysis"
         )
     elif st.session_state.use_sample:
-        action_label = "Run Sample Analysis" if analysis_mode == "Single Resume" else "Run Sample Batch Screening"
+        if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
+            action_label = "Run Sample Resume Health Analysis"
+        else:
+            action_label = "Run Sample Analysis" if analysis_mode == "Single Resume" else "Run Sample Batch Screening"
     else:
-        action_label = "Analyze Resume Match" if analysis_mode == "Single Resume" else "Run Batch Screening"
+        if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
+            action_label = "Run Resume Health Analysis"
+        else:
+            action_label = "Analyze Resume Match" if analysis_mode == "Single Resume" else "Run Batch Screening"
     if not inputs_ready:
         st.caption("Complete required inputs to enable Analyze.")
     run_clicked = st.button(action_label, type="primary", use_container_width=True, disabled=not inputs_ready)
@@ -2093,7 +2123,7 @@ def main() -> None:
         st.warning("No `GROQ_API_KEY` found. Running with rule-based suggestions for this analysis.")
 
     if run_clicked:
-        if simple_mode and screening_mode == "Resume Health":
+        if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
             if st.session_state.use_sample:
                 resume_text = SAMPLE_RESUME_TEXT
                 resume_pii = {}
@@ -2261,11 +2291,13 @@ def main() -> None:
                     st.session_state.batch_results = None
                     st.exception(exc)
 
-    has_output = (
-        st.session_state.analysis_results is not None
-        if analysis_mode == "Single Resume"
-        else bool(st.session_state.batch_results)
-    )
+    if analysis_mode == "Single Resume":
+        if screening_mode == "Resume Health":
+            has_output = st.session_state.resume_health_results is not None
+        else:
+            has_output = st.session_state.analysis_results is not None
+    else:
+        has_output = bool(st.session_state.batch_results)
     if simple_mode:
         if screening_mode == "Resume Health":
             if not st.session_state.resume_health_results:
@@ -2318,7 +2350,10 @@ def main() -> None:
 
             if st.session_state.use_sample:
                 st.info("Sample mode active.")
-                if analysis_mode == "Single Resume":
+                if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
+                    st.text_area("Sample Resume", SAMPLE_RESUME_TEXT, height=320, disabled=True)
+                    st.caption("Resume Health mode in Advanced uses resume-only scoring.")
+                elif analysis_mode == "Single Resume":
                     c1, c2 = st.columns(2)
                     with c1:
                         st.text_area("Sample Resume", SAMPLE_RESUME_TEXT, height=320, disabled=True)
@@ -2327,55 +2362,82 @@ def main() -> None:
                 else:
                     st.markdown("Using two built-in sample resumes against sample JD in batch mode.")
             else:
-                resume_ready = bool(resume_pdf) if analysis_mode == "Single Resume" else bool(resume_pdfs)
-                jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
-
-                c1, c2 = st.columns(2)
-                with c1:
+                if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
+                    resume_ready = bool(resume_pdf)
                     with st.container(border=True):
                         st.markdown("#### Resume Input")
                         if resume_ready:
                             st.success("Ready")
                         else:
                             st.info("Waiting for resume upload")
-                            if analysis_mode == "Single Resume":
-                                st.caption("Upload one resume PDF in the sidebar.")
-                            else:
-                                st.caption("Upload one or more resume PDFs in the sidebar.")
-                with c2:
-                    with st.container(border=True):
-                        st.markdown("#### JD Input")
-                        if jd_ready:
-                            st.success("Ready")
-                        else:
-                            st.info("Waiting for job description")
-                            st.caption("Paste JD text or upload a JD file in the sidebar.")
+                            st.caption("Upload one resume PDF in the sidebar.")
+                        if role_hint.strip():
+                            st.caption(f"Role Hint: {role_hint.strip()}")
 
-                if not resume_ready or not jd_ready:
-                    missing_parts = []
                     if not resume_ready:
-                        missing_parts.append("Resume")
-                    if not jd_ready:
-                        missing_parts.append("Job Description")
-                    st.warning(f"Missing: {', '.join(missing_parts)}. Complete these inputs to run analysis.")
+                        st.warning("Missing: Resume. Upload a resume PDF to run Resume Health analysis.")
+                    else:
+                        st.success("Inputs look good. Click analyze.")
                 else:
-                    st.success("Inputs look good. Click analyze.")
+                    resume_ready = bool(resume_pdf) if analysis_mode == "Single Resume" else bool(resume_pdfs)
+                    jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
+
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        with st.container(border=True):
+                            st.markdown("#### Resume Input")
+                            if resume_ready:
+                                st.success("Ready")
+                            else:
+                                st.info("Waiting for resume upload")
+                                if analysis_mode == "Single Resume":
+                                    st.caption("Upload one resume PDF in the sidebar.")
+                                else:
+                                    st.caption("Upload one or more resume PDFs in the sidebar.")
+                    with c2:
+                        with st.container(border=True):
+                            st.markdown("#### JD Input")
+                            if jd_ready:
+                                st.success("Ready")
+                            else:
+                                st.info("Waiting for job description")
+                                st.caption("Paste JD text or upload a JD file in the sidebar.")
+
+                    if not resume_ready or not jd_ready:
+                        missing_parts = []
+                        if not resume_ready:
+                            missing_parts.append("Resume")
+                        if not jd_ready:
+                            missing_parts.append("Job Description")
+                        st.warning(f"Missing: {', '.join(missing_parts)}. Complete these inputs to run analysis.")
+                    else:
+                        st.success("Inputs look good. Click analyze.")
 
         with results_tab:
             if analysis_mode == "Single Resume":
-                if not st.session_state.analysis_results:
-                    st.info("No analysis yet. Submit resume and JD to generate results.")
+                if screening_mode == "Resume Health":
+                    if not st.session_state.resume_health_results:
+                        st.info("No analysis yet. Submit a resume to generate Resume Health results.")
+                    else:
+                        render_resume_health_results(st.session_state.resume_health_results)
+                        privacy_summary = st.session_state.privacy_summary or {}
+                        if privacy_summary:
+                            st.markdown("#### Privacy Summary")
+                            st.json(privacy_summary)
                 else:
-                    render_single_results(
-                        st.session_state.analysis_results,
-                        st.session_state.get("resume_pdf_bytes"),
-                        st.session_state.get("jd_pdf_bytes"),
-                        simple_mode=False,
-                    )
-                    privacy_summary = st.session_state.privacy_summary or {}
-                    if privacy_summary:
-                        st.markdown("#### Privacy Summary")
-                        st.json(privacy_summary)
+                    if not st.session_state.analysis_results:
+                        st.info("No analysis yet. Submit resume and JD to generate results.")
+                    else:
+                        render_single_results(
+                            st.session_state.analysis_results,
+                            st.session_state.get("resume_pdf_bytes"),
+                            st.session_state.get("jd_pdf_bytes"),
+                            simple_mode=False,
+                        )
+                        privacy_summary = st.session_state.privacy_summary or {}
+                        if privacy_summary:
+                            st.markdown("#### Privacy Summary")
+                            st.json(privacy_summary)
             else:
                 if not st.session_state.batch_results:
                     st.info("No batch output yet. Upload resumes and run screening.")
