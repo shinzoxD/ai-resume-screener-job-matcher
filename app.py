@@ -1624,13 +1624,15 @@ def render_single_results(
         metric_cols[2].metric("Skill Alignment", f"{score['skill_alignment']}%")
         metric_cols[3].metric("Confidence", f"{confidence['confidence_pct']}%")
     else:
-        metric_cols = st.columns(6)
+        metric_cols = st.columns(4)
         metric_cols[0].metric("Overall Match", f"{score['overall']}%")
-        metric_cols[1].metric("Calibrated", f"{confidence['calibrated_overall']}%")
-        metric_cols[2].metric("Confidence", f"{confidence['confidence_pct']}%")
-        metric_cols[3].metric("Confidence Band", confidence["band"])
-        metric_cols[4].metric("Skill Alignment", f"{score['skill_alignment']}%")
-        metric_cols[5].metric("ATS Score", f"{ats['ats_score']}%")
+        metric_cols[1].metric("ATS Score", f"{ats['ats_score']}%")
+        metric_cols[2].metric("Skill Alignment", f"{score['skill_alignment']}%")
+        metric_cols[3].metric("Confidence", f"{confidence['confidence_pct']}%")
+        st.caption(
+            f"Calibrated: **{confidence['calibrated_overall']}%** | "
+            f"Confidence Band: **{confidence['band']}**"
+        )
     st.progress(min(max(score["overall"] / 100, 0.0), 1.0))
 
     language = results.get("language", {})
@@ -1662,8 +1664,7 @@ def render_single_results(
     )
 
     with tabs[0]:
-        if simple_mode:
-            render_interactive_audit_report(results)
+        render_interactive_audit_report(results)
         st.markdown("#### Strong Points")
         for point in strong_points:
             st.markdown(f"- {point}")
