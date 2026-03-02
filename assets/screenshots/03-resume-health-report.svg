@@ -1,0 +1,33 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="840" viewBox="0 0 1400 840">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#06101e"/>
+      <stop offset="100%" stop-color="#11253d"/>
+    </linearGradient>
+  </defs>
+  <rect width="1400" height="840" fill="url(#bg)"/>
+  <rect x="40" y="36" width="1320" height="88" rx="14" fill="#0d2239" stroke="#2dd4bf"/>
+  <text x="70" y="92" fill="#f0f7ff" font-size="44" font-family="Segoe UI, Arial" font-weight="700">Resume Health Report</text>
+  <rect x="40" y="154" width="420" height="646" rx="16" fill="#0d1a2a" stroke="#254563"/>
+  <text x="70" y="210" fill="#eaf4ff" font-size="34" font-family="Segoe UI, Arial" font-weight="700">Your Score</text>
+  <circle cx="250" cy="340" r="106" fill="none" stroke="#1d344e" stroke-width="26"/>
+  <circle cx="250" cy="340" r="106" fill="none" stroke="#22d3ee" stroke-width="26" stroke-linecap="round" stroke-dasharray="430 320" transform="rotate(-90 250 340)"/>
+  <text x="250" y="350" text-anchor="middle" fill="#f5fbff" font-size="56" font-family="Segoe UI, Arial" font-weight="700">64</text>
+  <text x="250" y="392" text-anchor="middle" fill="#99b8d7" font-size="24" font-family="Segoe UI, Arial">/100</text>
+  <text x="70" y="484" fill="#d5e8ff" font-size="22" font-family="Segoe UI, Arial">Section Quality ...... 17%</text>
+  <text x="70" y="528" fill="#d5e8ff" font-size="22" font-family="Segoe UI, Arial">Contact ............ 100%</text>
+  <text x="70" y="572" fill="#d5e8ff" font-size="22" font-family="Segoe UI, Arial">Quantified Impact ... 50%</text>
+  <text x="70" y="616" fill="#d5e8ff" font-size="22" font-family="Segoe UI, Arial">Bullet Quality ...... 45%</text>
+  <rect x="490" y="154" width="870" height="646" rx="16" fill="#0d1a2a" stroke="#254563"/>
+  <text x="520" y="210" fill="#eaf4ff" font-size="34" font-family="Segoe UI, Arial" font-weight="700">Top Fixes and Next Steps</text>
+  <rect x="520" y="246" width="810" height="70" rx="12" fill="#12324f"/>
+  <text x="545" y="288" fill="#bdfaf0" font-size="24" font-family="Segoe UI, Arial">Use standard headings and ATS-safe structure.</text>
+  <rect x="520" y="338" width="810" height="70" rx="12" fill="#12324f"/>
+  <text x="545" y="380" fill="#bdfaf0" font-size="24" font-family="Segoe UI, Arial">Rewrite bullets with clear metrics and outcomes.</text>
+  <rect x="520" y="430" width="810" height="70" rx="12" fill="#12324f"/>
+  <text x="545" y="472" fill="#bdfaf0" font-size="24" font-family="Segoe UI, Arial">Strengthen skill visibility across projects.</text>
+  <rect x="520" y="540" width="400" height="72" rx="12" fill="#14b8a6"/>
+  <text x="720" y="584" text-anchor="middle" fill="#05353a" font-size="25" font-family="Segoe UI, Arial" font-weight="700">Download Suggestions (PDF)</text>
+  <rect x="940" y="540" width="390" height="72" rx="12" fill="#0e7ecf"/>
+  <text x="1135" y="584" text-anchor="middle" fill="#e6f7ff" font-size="25" font-family="Segoe UI, Arial" font-weight="700">Copy Suggestions</text>
+</svg>

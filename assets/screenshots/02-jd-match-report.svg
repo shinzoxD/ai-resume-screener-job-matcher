@@ -1,0 +1,33 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="840" viewBox="0 0 1400 840">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#050c18"/>
+      <stop offset="100%" stop-color="#0f2137"/>
+    </linearGradient>
+  </defs>
+  <rect width="1400" height="840" fill="url(#bg)"/>
+  <rect x="40" y="36" width="1320" height="88" rx="14" fill="#0d2239" stroke="#2dd4bf"/>
+  <text x="70" y="92" fill="#f0f7ff" font-size="44" font-family="Segoe UI, Arial" font-weight="700">JD Match Report</text>
+  <rect x="40" y="152" width="1320" height="140" rx="16" fill="#0d1a2a" stroke="#244460"/>
+  <text x="70" y="206" fill="#d9ecff" font-size="24" font-family="Segoe UI, Arial">Overall Match: 72.4%</text>
+  <text x="420" y="206" fill="#d9ecff" font-size="24" font-family="Segoe UI, Arial">ATS Score: 78.1%</text>
+  <text x="720" y="206" fill="#d9ecff" font-size="24" font-family="Segoe UI, Arial">Skill Alignment: 69.0%</text>
+  <text x="1060" y="206" fill="#d9ecff" font-size="24" font-family="Segoe UI, Arial">Confidence: 81.3%</text>
+  <rect x="70" y="236" width="1260" height="10" rx="5" fill="#1f3248"/>
+  <rect x="70" y="236" width="911" height="10" rx="5" fill="#2dd4bf"/>
+  <rect x="40" y="320" width="420" height="480" rx="16" fill="#0d1a2a" stroke="#244460"/>
+  <text x="70" y="372" fill="#eff7ff" font-size="34" font-family="Segoe UI, Arial" font-weight="700">Your Score</text>
+  <circle cx="250" cy="520" r="106" fill="none" stroke="#1d344e" stroke-width="26"/>
+  <circle cx="250" cy="520" r="106" fill="none" stroke="#22d3ee" stroke-width="26" stroke-linecap="round" stroke-dasharray="500 250" transform="rotate(-90 250 520)"/>
+  <text x="250" y="530" text-anchor="middle" fill="#f5fbff" font-size="56" font-family="Segoe UI, Arial" font-weight="700">72</text>
+  <text x="250" y="570" text-anchor="middle" fill="#99b8d7" font-size="24" font-family="Segoe UI, Arial">/100</text>
+  <rect x="490" y="320" width="870" height="480" rx="16" fill="#0d1a2a" stroke="#244460"/>
+  <text x="520" y="372" fill="#eff7ff" font-size="34" font-family="Segoe UI, Arial" font-weight="700">Skills and Suggestions</text>
+  <rect x="520" y="410" width="390" height="48" rx="24" fill="#12324f" stroke="#2dd4bf"/>
+  <text x="715" y="442" text-anchor="middle" fill="#9ef8e8" font-size="20" font-family="Segoe UI, Arial">Matching Skills</text>
+  <rect x="940" y="410" width="390" height="48" rx="24" fill="#2b2333" stroke="#f59e0b"/>
+  <text x="1135" y="442" text-anchor="middle" fill="#ffd58a" font-size="20" font-family="Segoe UI, Arial">Missing Skills</text>
+  <text x="520" y="500" fill="#d6e9ff" font-size="22" font-family="Segoe UI, Arial">1. Add measurable bullet impact for missing tools.</text>
+  <text x="520" y="542" fill="#d6e9ff" font-size="22" font-family="Segoe UI, Arial">2. Mirror top JD keywords in Summary and Skills.</text>
+  <text x="520" y="584" fill="#d6e9ff" font-size="22" font-family="Segoe UI, Arial">3. Reorder projects to role-relevant evidence first.</text>
+</svg>

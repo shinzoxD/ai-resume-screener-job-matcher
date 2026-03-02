@@ -1,6 +1,6 @@
----
-title: AI Resume Screener & Job Matcher
-emoji: "\U0001F4C4"
+﻿---
+title: ResumePilot AI
+emoji: "📄"
 colorFrom: blue
 colorTo: indigo
 sdk: docker
@@ -8,17 +8,17 @@ app_port: 8501
 pinned: false
 ---
 
-# AI Resume Screener & Job Matcher
+# ResumePilot AI
 
-This Space is auto-deployed from GitHub via GitHub Actions.
+Dual-mode resume intelligence app:
+- JD Match mode: resume vs job-description scoring
+- Resume Health mode: standalone resume quality scoring and fixes
 
-## Features
-- Resume-to-JD hybrid match scoring
-- Skill gaps and ATS insights
-- Explainability + confidence scoring
-- Resume rewrite diff and tailored draft export
-- Batch recruiter screening dashboard
+This Space is auto-deployed from GitHub Actions.
 
-## Notes
-- Configure `GROQ_API_KEY` in Space Secrets if you want LLM suggestions.
-- This app runs as a Docker Space and serves Streamlit on port `8501`.
+## Configure Secrets
+- Add `GROQ_API_KEY` in Space Secrets for LLM suggestions.
+- If missing, the app automatically uses rule-based suggestions.
+
+## Source
+- GitHub: https://github.com/shinzoxD/ai-resume-screener-job-matcher
