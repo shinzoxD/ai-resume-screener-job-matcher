@@ -17,7 +17,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 from utils.confidence import compute_confidence
-from utils.extractor import extract_document, extract_text_from_input
+from utils.extractor import detect_sections, extract_document, extract_text_from_input
 from utils.fairness import analyze_bias_risks
 from utils.llm_suggestions import build_suggestions_markdown, generate_improvement_suggestions
 from utils.matcher import (
@@ -40,7 +40,7 @@ from utils.privacy import redact_pii
 from utils.requirements_analyzer import extract_jd_requirements, map_requirements_to_evidence
 from utils.rewriter import render_bullet_diff_html, rewrite_resume_bullets
 from utils.role_templates import get_role_template, get_role_template_names, get_template_skill_pool, get_template_weights
-from utils.skills_db import format_skill_list
+from utils.skills_db import extract_skills_from_text, format_skill_list
 from utils.tailor import build_tailored_resume_draft
 
 SAMPLE_RESUME_TEXT = """
@@ -559,10 +559,10 @@ def _score_tone(score: float) -> str:
 
 def _status_icon(score: float) -> str:
     if score >= 80:
-        return "✅"
+        return "OK"
     if score >= 60:
-        return "⚠️"
-    return "❌"
+        return "WARN"
+    return "FAIL"
 
 
 def _quantification_score(results: Dict[str, Any]) -> float:
@@ -737,10 +737,10 @@ def render_interactive_audit_report(results: Dict[str, Any]) -> None:
 
         has_llm_suggestions = bool((results.get("suggestions_payload") or {}).get("suggestions"))
         flow_rows = [
-            ("✅", "Parsing your resume", True),
-            ("✅", "Analyzing your experience", True),
-            ("✅", "Extracting your skills", True),
-            ("✅" if has_llm_suggestions else "⚠️", "Generating recommendations", has_llm_suggestions),
+            ("OK", "Parsing your resume", True),
+            ("OK", "Analyzing your experience", True),
+            ("OK", "Extracting your skills", True),
+            ("OK" if has_llm_suggestions else "WARN", "Generating recommendations", has_llm_suggestions),
         ]
         flow_html = "".join(
             f'<div class="eh-flow-item{" dim" if not done else ""}">{icon} {label}</div>'
@@ -1007,6 +1007,208 @@ def run_analysis(
         "resume_text": resume_text,
         "jd_text": jd_text,
     }
+
+
+def run_resume_health_analysis(
+    resume_text: str,
+    role_hint: str,
+    groq_api_key: str,
+    llm_model_name: str,
+) -> Dict[str, Any]:
+    metrics = AnalysisMetrics()
+
+    metrics.start_stage("resume_health_scoring")
+    sections_presence = detect_sections(resume_text)
+    section_hits = sum(1 for present in sections_presence.values() if present)
+    section_score = round((section_hits / max(len(sections_presence), 1)) * 100, 2)
+
+    contact_patterns = {
+        "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        "phone": r"(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b",
+        "linkedin": r"(?:linkedin\.com/in/|linkedin\.com/company/)",
+        "github": r"(?:github\.com/)",
+    }
+    contact_hits = sum(
+        1 for pattern in contact_patterns.values() if re.search(pattern, resume_text or "", flags=re.IGNORECASE)
+    )
+    contact_score = round((contact_hits / max(len(contact_patterns), 1)) * 100, 2)
+
+    word_count = len(re.findall(r"\b\w+\b", resume_text))
+    if 350 <= word_count <= 900:
+        length_score = 100.0
+    elif 250 <= word_count <= 1100:
+        length_score = 78.0
+    elif word_count > 0:
+        length_score = 50.0
+    else:
+        length_score = 0.0
+
+    bullet_lines = len(re.findall(r"^\s*[-*]\s+", resume_text or "", flags=re.MULTILINE))
+    bullet_score = 100.0 if bullet_lines >= 4 else (75.0 if bullet_lines >= 2 else 45.0)
+
+    quantification_score = _quantification_score({"resume_text": resume_text})
+    resume_skills = sorted(extract_skills_from_text(resume_text))
+    skill_spread_score = min(len(resume_skills) * 8, 100)
+
+    overall = round(
+        (0.24 * section_score)
+        + (0.22 * contact_score)
+        + (0.18 * length_score)
+        + (0.14 * bullet_score)
+        + (0.16 * quantification_score)
+        + (0.06 * skill_spread_score),
+        2,
+    )
+    metrics.end_stage("resume_health_scoring")
+
+    fixes: List[str] = []
+    quality_gaps: List[str] = []
+    if section_score < 80:
+        fixes.append("Add standard headings: Summary, Experience, Skills, Projects, Education.")
+        quality_gaps.append("section structure")
+    if contact_score < 75:
+        fixes.append("Include complete contact details: email, phone, LinkedIn, and GitHub.")
+        quality_gaps.append("contact details")
+    if quantification_score < 60:
+        fixes.append("Rewrite bullets with measurable impact (percentages, time, revenue, scale).")
+        quality_gaps.append("quantified impact")
+    if bullet_score < 70:
+        fixes.append("Use concise bullet points in experience sections for ATS readability.")
+        quality_gaps.append("bullet formatting")
+    if length_score < 70:
+        fixes.append("Tighten resume length to stay focused and role-relevant.")
+        quality_gaps.append("resume length")
+    if skill_spread_score < 40:
+        fixes.append("Surface core technical skills clearly in a dedicated Skills section.")
+        quality_gaps.append("skill visibility")
+    if not fixes:
+        fixes.append("Resume structure is strong. Prioritize role tailoring and quantified wins.")
+
+    strong_points: List[str] = []
+    if section_score >= 80:
+        strong_points.append("Section structure is ATS-friendly and easy to parse.")
+    if contact_score >= 75:
+        strong_points.append("Contact details are complete and recruiter-ready.")
+    if quantification_score >= 70:
+        strong_points.append("Experience bullets show measurable impact.")
+    if bullet_score >= 70:
+        strong_points.append("Bullet formatting supports quick recruiter scanning.")
+    if skill_spread_score >= 50:
+        strong_points.append(f"Strong visible skill coverage: {', '.join(resume_skills[:6])}.")
+    if not strong_points:
+        strong_points.append("Good foundation; focused edits can raise interview readiness quickly.")
+
+    suggestion_context = (
+        f"Resume-only quality audit for role target: {role_hint}."
+        if role_hint.strip()
+        else "Resume-only quality audit. Improve ATS readiness, impact, and clarity."
+    )
+    metrics.start_stage("llm_suggestions")
+    suggestions_payload = generate_improvement_suggestions(
+        resume_text=resume_text,
+        jd_text=suggestion_context,
+        match_score=overall,
+        missing_skills=quality_gaps,
+        matching_skills=resume_skills[:8],
+        groq_api_key=groq_api_key,
+        model_name=llm_model_name,
+    )
+    usage = suggestions_payload.get("usage", {})
+    metrics.set_llm_usage(
+        prompt_tokens=int(usage.get("prompt_tokens", 0)),
+        completion_tokens=int(usage.get("completion_tokens", 0)),
+        estimated_cost_usd=float(usage.get("estimated_cost_usd", 0.0)),
+    )
+    metrics.end_stage("llm_suggestions")
+
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "mode": "resume_health",
+        "health_metrics": {
+            "overall": overall,
+            "section_score": round(section_score, 2),
+            "contact_score": round(contact_score, 2),
+            "length_score": round(length_score, 2),
+            "bullet_score": round(bullet_score, 2),
+            "quantification_score": round(quantification_score, 2),
+            "skill_spread_score": round(skill_spread_score, 2),
+            "word_count": word_count,
+        },
+        "sections_presence": sections_presence,
+        "resume_skills": resume_skills,
+        "quality_gaps": quality_gaps,
+        "fixes": fixes,
+        "strong_points": strong_points,
+        "suggestions_payload": suggestions_payload,
+        "observability": metrics.to_dict(),
+        "resume_text": resume_text,
+        "role_hint": role_hint.strip(),
+    }
+
+
+def render_resume_health_results(results: Dict[str, Any]) -> None:
+    hm = results.get("health_metrics", {})
+    overall = float(hm.get("overall", 0))
+    suggestions_payload = results.get("suggestions_payload", {})
+    suggestions = suggestions_payload.get("suggestions", [])
+
+    st.markdown("### Resume Health Report")
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Resume Score", f"{overall:.2f}%")
+    m2.metric("Section Quality", f"{hm.get('section_score', 0):.2f}%")
+    m3.metric("Contact Completeness", f"{hm.get('contact_score', 0):.2f}%")
+    m4.metric("Quantified Impact", f"{hm.get('quantification_score', 0):.2f}%")
+    m5.metric("Bullet Quality", f"{hm.get('bullet_score', 0):.2f}%")
+    st.progress(min(max(overall / 100, 0.0), 1.0))
+    st.caption(f"Word Count: {hm.get('word_count', 0)} | Skill Visibility: {hm.get('skill_spread_score', 0):.2f}%")
+
+    tabs = st.tabs(["Fixes", "Suggestions", "Structure"])
+
+    with tabs[0]:
+        st.markdown("#### Top Fixes")
+        for idx, fix in enumerate(results.get("fixes", []), start=1):
+            st.markdown(f"{idx}. {fix}")
+        st.markdown("#### Strong Points")
+        for point in results.get("strong_points", []):
+            st.markdown(f"- {point}")
+
+    with tabs[1]:
+        provider = suggestions_payload.get("provider", "unknown")
+        st.markdown("#### Personalized Suggestions")
+        st.caption(f"Suggestion source: `{provider}`")
+        if provider == "rule-based":
+            diagnostics = suggestions_payload.get("diagnostics", {})
+            if diagnostics:
+                with st.expander("LLM Diagnostics", expanded=False):
+                    st.json(diagnostics)
+        for idx, suggestion in enumerate(suggestions or ["No suggestions generated."], start=1):
+            st.markdown(f"{idx}. {suggestion}")
+
+        render_copy_suggestions_widget(suggestions or ["No suggestions generated."], key_suffix="resume_health")
+        report_md = build_suggestions_markdown(
+            match_score=overall,
+            matching_skills=format_skill_list(results.get("resume_skills", [])[:10]),
+            missing_skills=format_skill_list(results.get("quality_gaps", [])),
+            strong_points=results.get("strong_points", []),
+            suggestions=suggestions or ["Prioritize measurable impact and ATS-safe formatting."],
+            ats_score=float(hm.get("section_score", 0)),
+        )
+        report_pdf = markdown_to_pdf_bytes(report_md)
+        st.download_button(
+            "Download Resume Health Report (PDF)",
+            data=report_pdf,
+            file_name="resume_health_report.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+    with tabs[2]:
+        presence = results.get("sections_presence", {})
+        if presence:
+            rows = [{"section": key.title(), "present": "Yes" if value else "No"} for key, value in presence.items()]
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.markdown("#### Detected Skills")
+        render_skill_pills(format_skill_list(results.get("resume_skills", [])))
 
 
 def run_batch_analysis(
@@ -1466,6 +1668,7 @@ def main() -> None:
     defaults = {
         "use_sample": False,
         "analysis_results": None,
+        "resume_health_results": None,
         "batch_results": None,
         "privacy_summary": {},
         "resume_pdf_bytes": None,
@@ -1503,6 +1706,8 @@ def main() -> None:
     secret_groq_key = safe_get_secret("GROQ_API_KEY")
     groq_api_key = secret_groq_key
     simple_mode = True
+    screening_mode = "JD Match"
+    role_hint = ""
 
     with st.sidebar:
         st.subheader("Quick Setup")
@@ -1511,6 +1716,7 @@ def main() -> None:
         if simple_mode:
             analysis_mode = "Single Resume"
             role_template_name = "General"
+            screening_mode = st.radio("Screening Mode", ["JD Match", "Resume Health"], index=0)
             st.caption("Simple mode keeps only core controls.")
 
             source_options = ["Live Upload/Paste", "Use Built-in Sample"]
@@ -1577,12 +1783,16 @@ def main() -> None:
 
     if simple_mode:
         st.markdown(
-            """
+            f"""
             <div class="home-shell">
-                <div class="home-title">Start Your Resume Match</div>
-                <div class="home-sub">Upload your resume, add the target job description, and get an interactive audit + AI suggestions.</div>
+                <div class="home-title">Start Your {"JD Match" if screening_mode == "JD Match" else "Resume Health Check"}</div>
+                <div class="home-sub">{
+                    "Upload resume + target JD to get fit score, skills gap, and AI suggestions."
+                    if screening_mode == "JD Match"
+                    else "Upload your resume only to get quality score, ATS health, and concrete fixes."
+                }</div>
                 <span class="home-step">1 Upload Resume</span>
-                <span class="home-step">2 Add Job Description</span>
+                <span class="home-step">{'2 Add Job Description' if screening_mode == "JD Match" else '2 Run Resume Health Audit'}</span>
                 <span class="home-step">3 Analyze and Improve</span>
             </div>
             """,
@@ -1591,58 +1801,97 @@ def main() -> None:
 
         if st.session_state.use_sample:
             st.markdown(
-                "<div class='home-ready good'>Sample mode active. Built-in resume and JD will be analyzed when you click Analyze.</div>",
+                (
+                    "<div class='home-ready good'>Sample mode active. Built-in resume and JD will be analyzed when you click Analyze.</div>"
+                    if screening_mode == "JD Match"
+                    else "<div class='home-ready good'>Sample mode active. Built-in resume will be analyzed when you click Analyze.</div>"
+                ),
                 unsafe_allow_html=True,
             )
         else:
-            i1, i2 = st.columns([1, 1], gap="large")
-            with i1:
-                with st.container(border=True):
-                    st.markdown("#### Resume")
-                    st.caption("Upload one resume PDF (max 20MB).")
-                    resume_pdf = st.file_uploader(
-                        "Upload Resume PDF",
-                        type=["pdf"],
-                        accept_multiple_files=False,
-                        key="main_resume_pdf",
-                    )
-            with i2:
-                with st.container(border=True):
-                    st.markdown("#### Job Description")
-                    jd_mode_pick = st.radio(
-                        "JD Input Type",
-                        ["Paste Text", "Upload File"],
-                        horizontal=True,
-                        key="main_jd_mode_pick",
-                    )
-                    if jd_mode_pick == "Upload File":
-                        jd_mode = "Upload File"
-                        jd_upload = st.file_uploader(
-                            "Upload JD (PDF or TXT)",
-                            type=["pdf", "txt"],
-                            key="main_jd_upload",
+            if screening_mode == "JD Match":
+                i1, i2 = st.columns([1, 1], gap="large")
+                with i1:
+                    with st.container(border=True):
+                        st.markdown("#### Resume")
+                        st.caption("Upload one resume PDF (max 20MB).")
+                        resume_pdf = st.file_uploader(
+                            "Upload Resume PDF",
+                            type=["pdf"],
+                            accept_multiple_files=False,
+                            key="main_resume_pdf",
                         )
-                    else:
-                        jd_mode = "Paste Text"
-                        jd_pasted = st.text_area(
-                            "Paste Job Description",
-                            height=190,
-                            key="main_jd_pasted",
-                            placeholder="Paste the full job description here...",
+                with i2:
+                    with st.container(border=True):
+                        st.markdown("#### Job Description")
+                        jd_mode_pick = st.radio(
+                            "JD Input Type",
+                            ["Paste Text", "Upload File"],
+                            horizontal=True,
+                            key="main_jd_mode_pick",
                         )
+                        if jd_mode_pick == "Upload File":
+                            jd_mode = "Upload File"
+                            jd_upload = st.file_uploader(
+                                "Upload JD (PDF or TXT)",
+                                type=["pdf", "txt"],
+                                key="main_jd_upload",
+                            )
+                        else:
+                            jd_mode = "Paste Text"
+                            jd_pasted = st.text_area(
+                                "Paste Job Description",
+                                height=190,
+                                key="main_jd_pasted",
+                                placeholder="Paste the full job description here...",
+                            )
 
-            resume_ready = bool(resume_pdf)
-            jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
-            ready_cls = "good" if (resume_ready and jd_ready) else "warn"
-            ready_text = (
-                "Inputs ready. Click Analyze."
-                if (resume_ready and jd_ready)
-                else "Upload both Resume and JD to enable a full analysis."
-            )
+                resume_ready = bool(resume_pdf)
+                jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
+                ready_cls = "good" if (resume_ready and jd_ready) else "warn"
+                ready_text = (
+                    "Inputs ready. Click Analyze."
+                    if (resume_ready and jd_ready)
+                    else "Upload both Resume and JD to enable a full analysis."
+                )
+            else:
+                i1, i2 = st.columns([1.35, 1], gap="large")
+                with i1:
+                    with st.container(border=True):
+                        st.markdown("#### Resume")
+                        st.caption("Upload one resume PDF (max 20MB).")
+                        resume_pdf = st.file_uploader(
+                            "Upload Resume PDF",
+                            type=["pdf"],
+                            accept_multiple_files=False,
+                            key="main_resume_pdf_health",
+                        )
+                with i2:
+                    with st.container(border=True):
+                        st.markdown("#### Target Role (Optional)")
+                        role_hint = st.text_input(
+                            "Role Hint",
+                            value="",
+                            key="main_role_hint",
+                            placeholder="Example: Data Scientist, Backend Engineer, AI Engineer",
+                        )
+                        st.caption("Used to tailor resume-only suggestions.")
+
+                ready_cls = "good" if bool(resume_pdf) else "warn"
+                ready_text = (
+                    "Resume ready. Click Analyze."
+                    if bool(resume_pdf)
+                    else "Upload a resume PDF to run Resume Health mode."
+                )
+
             st.markdown(f"<div class='home-ready {ready_cls}'>{ready_text}</div>", unsafe_allow_html=True)
 
     if simple_mode:
-        action_label = "Analyze Resume with AI Suggestions"
+        action_label = (
+            "Analyze Resume with AI Suggestions"
+            if screening_mode == "JD Match"
+            else "Run Resume Health Analysis"
+        )
     elif st.session_state.use_sample:
         action_label = "Run Sample Analysis" if analysis_mode == "Single Resume" else "Run Sample Batch Screening"
     else:
@@ -1653,32 +1902,9 @@ def main() -> None:
         st.warning("No `GROQ_API_KEY` found. Running with rule-based suggestions for this analysis.")
 
     if run_clicked:
-        with st.spinner("Preparing inputs..."):
-            if st.session_state.use_sample:
-                jd_text = SAMPLE_JD_TEXT
-                st.session_state.jd_pdf_bytes = None
-            else:
-                if jd_mode == "Upload File":
-                    jd_text = (
-                        extract_text_from_input(jd_upload, use_ocr_fallback=use_ocr_fallback)
-                        if jd_upload is not None
-                        else ""
-                    )
-                else:
-                    jd_text = jd_pasted.strip()
-
-                st.session_state.jd_pdf_bytes = _extract_uploaded_bytes(jd_upload) if jd_upload else None
-
-            jd_pii = {}
-            if redact_enabled and jd_text:
-                jd_text, jd_pii = redact_pii(jd_text)
-
-        if not jd_text.strip():
-            st.error("Job description is empty. Please provide a valid JD.")
-        elif analysis_mode == "Single Resume":
+        if simple_mode and screening_mode == "Resume Health":
             if st.session_state.use_sample:
                 resume_text = SAMPLE_RESUME_TEXT
-                resume_meta = {"word_count": len(SAMPLE_RESUME_TEXT.split()), "sections": {}}
                 resume_pii = {}
                 resume_pdf_bytes = None
                 if redact_enabled:
@@ -1691,7 +1917,6 @@ def main() -> None:
                     redact_enabled=redact_enabled,
                 )
                 resume_text = prep["text"]
-                resume_meta = prep["metadata"]
                 resume_pii = prep["pii_counts"]
                 resume_pdf_bytes = _extract_uploaded_bytes(resume_pdf) if resume_pdf else None
 
@@ -1699,69 +1924,118 @@ def main() -> None:
                 st.error("Resume text is empty. Please upload a valid PDF or use sample mode.")
             else:
                 try:
-                    analysis = run_analysis(
+                    health_results = run_resume_health_analysis(
                         resume_text=resume_text,
-                        jd_text=jd_text,
-                        base_model_name=base_model_name,
-                        auto_multilingual=auto_multilingual,
-                        role_template_name=role_template_name,
-                        use_reranker=use_reranker,
-                        reranker_model=reranker_model,
+                        role_hint=role_hint,
                         groq_api_key=groq_api_key,
                         llm_model_name=llm_model_name,
-                        include_suggestions=True,
                     )
-                    analysis["input_metadata"] = {
-                        "resume_word_count": resume_meta.get("word_count", 0),
-                        "jd_word_count": len(jd_text.split()),
-                    }
-                    analysis["privacy"] = {"resume_pii_redacted": resume_pii, "jd_pii_redacted": jd_pii}
-
-                    st.session_state.analysis_results = analysis
-                    st.session_state.batch_results = None
-                    st.session_state.privacy_summary = analysis["privacy"]
-                    st.session_state.resume_pdf_bytes = resume_pdf_bytes
-
-                    st.success("Single resume analysis complete.")
-                except Exception as exc:
+                    health_results["privacy"] = {"resume_pii_redacted": resume_pii, "jd_pii_redacted": {}}
+                    st.session_state.resume_health_results = health_results
                     st.session_state.analysis_results = None
+                    st.session_state.batch_results = None
+                    st.session_state.privacy_summary = health_results["privacy"]
+                    st.session_state.resume_pdf_bytes = resume_pdf_bytes
+                    st.session_state.jd_pdf_bytes = None
+                    st.success("Resume health analysis complete.")
+                except Exception as exc:
+                    st.session_state.resume_health_results = None
                     st.exception(exc)
         else:
-            try:
-                if st.session_state.use_sample and not resume_pdfs:
-                    class _SampleUpload:
-                        def __init__(self, name: str, text: str) -> None:
-                            self.name = name
-                            self._bytes = text.encode("utf-8")
+            with st.spinner("Preparing inputs..."):
+                if st.session_state.use_sample:
+                    jd_text = SAMPLE_JD_TEXT
+                    st.session_state.jd_pdf_bytes = None
+                else:
+                    if jd_mode == "Upload File":
+                        jd_text = (
+                            extract_text_from_input(jd_upload, use_ocr_fallback=use_ocr_fallback)
+                            if jd_upload is not None
+                            else ""
+                        )
+                    else:
+                        jd_text = jd_pasted.strip()
 
-                        def read(self) -> bytes:
-                            return self._bytes
+                    st.session_state.jd_pdf_bytes = _extract_uploaded_bytes(jd_upload) if jd_upload else None
 
-                        def seek(self, _: int) -> None:
-                            return None
+                jd_pii = {}
+                if redact_enabled and jd_text:
+                    jd_text, jd_pii = redact_pii(jd_text)
 
-                    sample_files = [
-                        _SampleUpload("sample_resume_1.txt", SAMPLE_RESUME_TEXT),
-                        _SampleUpload("sample_resume_2.txt", SAMPLE_RESUME_TEXT_2),
-                    ]
-                    rows = run_batch_analysis(
-                        resume_files=sample_files,
-                        jd_text=jd_text,
-                        base_model_name=base_model_name,
-                        auto_multilingual=auto_multilingual,
-                        role_template_name=role_template_name,
-                        use_reranker=use_reranker,
-                        reranker_model=reranker_model,
+            if not jd_text.strip():
+                st.error("Job description is empty. Please provide a valid JD.")
+            elif analysis_mode == "Single Resume":
+                if st.session_state.use_sample:
+                    resume_text = SAMPLE_RESUME_TEXT
+                    resume_meta = {"word_count": len(SAMPLE_RESUME_TEXT.split()), "sections": {}}
+                    resume_pii = {}
+                    resume_pdf_bytes = None
+                    if redact_enabled:
+                        resume_text, resume_pii = redact_pii(resume_text)
+                else:
+                    prep = _prepare_text(
+                        uploaded_file=resume_pdf,
+                        pasted_text=None,
                         use_ocr_fallback=use_ocr_fallback,
                         redact_enabled=redact_enabled,
                     )
+                    resume_text = prep["text"]
+                    resume_meta = prep["metadata"]
+                    resume_pii = prep["pii_counts"]
+                    resume_pdf_bytes = _extract_uploaded_bytes(resume_pdf) if resume_pdf else None
+
+                if not resume_text.strip():
+                    st.error("Resume text is empty. Please upload a valid PDF or use sample mode.")
                 else:
-                    if not resume_pdfs:
-                        st.error("Please upload at least one resume PDF for batch mode.")
-                        rows = []
-                    else:
+                    try:
+                        analysis = run_analysis(
+                            resume_text=resume_text,
+                            jd_text=jd_text,
+                            base_model_name=base_model_name,
+                            auto_multilingual=auto_multilingual,
+                            role_template_name=role_template_name,
+                            use_reranker=use_reranker,
+                            reranker_model=reranker_model,
+                            groq_api_key=groq_api_key,
+                            llm_model_name=llm_model_name,
+                            include_suggestions=True,
+                        )
+                        analysis["input_metadata"] = {
+                            "resume_word_count": resume_meta.get("word_count", 0),
+                            "jd_word_count": len(jd_text.split()),
+                        }
+                        analysis["privacy"] = {"resume_pii_redacted": resume_pii, "jd_pii_redacted": jd_pii}
+
+                        st.session_state.analysis_results = analysis
+                        st.session_state.resume_health_results = None
+                        st.session_state.batch_results = None
+                        st.session_state.privacy_summary = analysis["privacy"]
+                        st.session_state.resume_pdf_bytes = resume_pdf_bytes
+
+                        st.success("Single resume analysis complete.")
+                    except Exception as exc:
+                        st.session_state.analysis_results = None
+                        st.exception(exc)
+            else:
+                try:
+                    if st.session_state.use_sample and not resume_pdfs:
+                        class _SampleUpload:
+                            def __init__(self, name: str, text: str) -> None:
+                                self.name = name
+                                self._bytes = text.encode("utf-8")
+
+                            def read(self) -> bytes:
+                                return self._bytes
+
+                            def seek(self, _: int) -> None:
+                                return None
+
+                        sample_files = [
+                            _SampleUpload("sample_resume_1.txt", SAMPLE_RESUME_TEXT),
+                            _SampleUpload("sample_resume_2.txt", SAMPLE_RESUME_TEXT_2),
+                        ]
                         rows = run_batch_analysis(
-                            resume_files=resume_pdfs,
+                            resume_files=sample_files,
                             jd_text=jd_text,
                             base_model_name=base_model_name,
                             auto_multilingual=auto_multilingual,
@@ -1771,13 +2045,30 @@ def main() -> None:
                             use_ocr_fallback=use_ocr_fallback,
                             redact_enabled=redact_enabled,
                         )
-                st.session_state.batch_results = rows
-                st.session_state.analysis_results = None
-                if rows:
-                    st.success(f"Batch screening complete for {len(rows)} resumes.")
-            except Exception as exc:
-                st.session_state.batch_results = None
-                st.exception(exc)
+                    else:
+                        if not resume_pdfs:
+                            st.error("Please upload at least one resume PDF for batch mode.")
+                            rows = []
+                        else:
+                            rows = run_batch_analysis(
+                                resume_files=resume_pdfs,
+                                jd_text=jd_text,
+                                base_model_name=base_model_name,
+                                auto_multilingual=auto_multilingual,
+                                role_template_name=role_template_name,
+                                use_reranker=use_reranker,
+                                reranker_model=reranker_model,
+                                use_ocr_fallback=use_ocr_fallback,
+                                redact_enabled=redact_enabled,
+                            )
+                    st.session_state.batch_results = rows
+                    st.session_state.analysis_results = None
+                    st.session_state.resume_health_results = None
+                    if rows:
+                        st.success(f"Batch screening complete for {len(rows)} resumes.")
+                except Exception as exc:
+                    st.session_state.batch_results = None
+                    st.exception(exc)
 
     has_output = (
         st.session_state.analysis_results is not None
@@ -1785,31 +2076,45 @@ def main() -> None:
         else bool(st.session_state.batch_results)
     )
     if simple_mode:
-        if not st.session_state.analysis_results:
-            st.caption("Fill the home inputs above, then click Analyze.")
+        if screening_mode == "Resume Health":
+            if not st.session_state.resume_health_results:
+                st.caption("Upload a resume and click Analyze to see resume quality score and fixes.")
+            else:
+                render_resume_health_results(st.session_state.resume_health_results)
         else:
-            render_single_results(
-                st.session_state.analysis_results,
-                st.session_state.get("resume_pdf_bytes"),
-                st.session_state.get("jd_pdf_bytes"),
-                simple_mode=True,
-            )
+            if not st.session_state.analysis_results:
+                st.caption("Fill the home inputs above, then click Analyze.")
+            else:
+                render_single_results(
+                    st.session_state.analysis_results,
+                    st.session_state.get("resume_pdf_bytes"),
+                    st.session_state.get("jd_pdf_bytes"),
+                    simple_mode=True,
+                )
 
         with st.expander("Input Preview", expanded=False):
             if st.session_state.use_sample:
-                c1, c2 = st.columns(2)
-                with c1:
+                if screening_mode == "JD Match":
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.text_area("Sample Resume", SAMPLE_RESUME_TEXT, height=220, disabled=True)
+                    with c2:
+                        st.text_area("Sample JD", SAMPLE_JD_TEXT, height=220, disabled=True)
+                else:
                     st.text_area("Sample Resume", SAMPLE_RESUME_TEXT, height=220, disabled=True)
-                with c2:
-                    st.text_area("Sample JD", SAMPLE_JD_TEXT, height=220, disabled=True)
             else:
-                resume_ready = bool(resume_pdf)
-                jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.metric("Resume Input", "Ready" if resume_ready else "Missing")
-                with c2:
-                    st.metric("JD Input", "Ready" if jd_ready else "Missing")
+                if screening_mode == "JD Match":
+                    resume_ready = bool(resume_pdf)
+                    jd_ready = bool(jd_upload) if jd_mode == "Upload File" else bool(jd_pasted.strip())
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.metric("Resume Input", "Ready" if resume_ready else "Missing")
+                    with c2:
+                        st.metric("JD Input", "Ready" if jd_ready else "Missing")
+                else:
+                    st.metric("Resume Input", "Ready" if bool(resume_pdf) else "Missing")
+                    if role_hint.strip():
+                        st.caption(f"Role Hint: {role_hint.strip()}")
     else:
         if has_output:
             results_tab, input_tab = st.tabs(["Analysis Results", "Input Preview"])
