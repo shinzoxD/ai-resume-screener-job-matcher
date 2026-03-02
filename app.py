@@ -157,6 +157,48 @@ def render_skill_pills(skills: Sequence[str]) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_copy_suggestions_widget(suggestions: Sequence[str], *, key_suffix: str = "default") -> None:
+    lines = [f"{idx}. {text}" for idx, text in enumerate(suggestions, start=1)]
+    payload_text = "\n".join(lines) if lines else "No suggestions generated."
+    payload_json = json.dumps(payload_text)
+
+    components.html(
+        f"""
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <button id="copy-btn-{key_suffix}" style="
+            background:#00B894; color:#fff; border:0; border-radius:8px;
+            padding:8px 12px; cursor:pointer; font-weight:600;">
+            Copy All Suggestions
+          </button>
+          <span id="copy-status-{key_suffix}" style="color:#9AA5B1; font-size:12px;"></span>
+        </div>
+        <script>
+          const text = {payload_json};
+          const btn = document.getElementById("copy-btn-{key_suffix}");
+          const status = document.getElementById("copy-status-{key_suffix}");
+          btn.addEventListener("click", async () => {{
+            try {{
+              await navigator.clipboard.writeText(text);
+              status.textContent = "Copied to clipboard.";
+            }} catch (err) {{
+              status.textContent = "Clipboard blocked. Use the fallback text box below.";
+            }}
+          }});
+        </script>
+        """,
+        height=62,
+    )
+    st.text_area("Copy Fallback", value=payload_text, height=120, key=f"copy_fallback_{key_suffix}")
+
+
+def render_next_steps_checklist(missing_skills: Sequence[str], target_score: float = 70.0) -> None:
+    top_missing = ", ".join(list(missing_skills)[:3]) if missing_skills else "top missing skills"
+    st.markdown("#### What To Do Next")
+    st.markdown(f"- [ ] Add measurable evidence bullets for: {top_missing}.")
+    st.markdown("- [ ] Mirror 5 exact JD keywords in your Summary + Skills sections.")
+    st.markdown(f"- [ ] Re-run analysis and target at least **{target_score:.0f}%** overall match.")
+
+
 def markdown_to_pdf_bytes(markdown_text: str) -> bytes:
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
@@ -443,6 +485,7 @@ def render_single_results(
     resume_pdf_bytes: bytes | None,
     jd_pdf_bytes: bytes | None,
     simple_mode: bool = False,
+    focus_suggestions: bool = False,
 ) -> None:
     score = results["score_details"]
     skills = results["skill_details"]
@@ -479,9 +522,13 @@ def render_single_results(
     )
 
     if simple_mode:
-        tabs = st.tabs(["Summary", "Skills Gap", "Suggestions"])
+        tab_labels = ["Suggestions", "Summary", "Skills Gap"] if focus_suggestions else ["Summary", "Skills Gap", "Suggestions"]
+        if focus_suggestions:
+            st.info("Opened Suggestions first for quick action.")
+        tab_objs = st.tabs(tab_labels)
+        tab_map = {name: tab for name, tab in zip(tab_labels, tab_objs)}
 
-        with tabs[0]:
+        with tab_map["Summary"]:
             st.markdown("#### Strong Points")
             for point in strong_points:
                 st.markdown(f"- {point}")
@@ -491,7 +538,7 @@ def render_single_results(
             b2.metric("Lexical", f"{score['lexical']}%")
             b3.metric("Confidence", f"{confidence['confidence_pct']}%")
 
-        with tabs[1]:
+        with tab_map["Skills Gap"]:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown("#### Matching Skills")
@@ -503,7 +550,7 @@ def render_single_results(
             for tip in ats["tips"][:4]:
                 st.markdown(f"- {tip}")
 
-        with tabs[2]:
+        with tab_map["Suggestions"]:
             st.markdown("#### Personalized Suggestions")
             provider = suggestions_payload.get("provider", "unknown")
             st.caption(f"Suggestion source: `{provider}`")
@@ -514,6 +561,9 @@ def render_single_results(
                     st.json(diagnostics)
             for idx, suggestion in enumerate(suggestions or ["No suggestions generated in this mode."], start=1):
                 st.markdown(f"{idx}. {suggestion}")
+
+            render_copy_suggestions_widget(suggestions or ["No suggestions generated in this mode."], key_suffix="simple")
+            render_next_steps_checklist(format_skill_list(skills["missing_skills"]))
 
             report_md = build_suggestions_markdown(
                 match_score=score["overall"],
@@ -567,6 +617,8 @@ def render_single_results(
         st.caption(f"Suggestion source: `{suggestions_payload.get('provider', 'unknown')}`")
         for idx, suggestion in enumerate(suggestions or ["No suggestions generated in this mode."], start=1):
             st.markdown(f"{idx}. {suggestion}")
+        render_copy_suggestions_widget(suggestions or ["No suggestions generated in this mode."], key_suffix="advanced")
+        render_next_steps_checklist(format_skill_list(skills["missing_skills"]))
 
     with tabs[1]:
         section_df = pd.DataFrame(section_scores)
@@ -805,6 +857,7 @@ def main() -> None:
         "privacy_summary": {},
         "resume_pdf_bytes": None,
         "jd_pdf_bytes": None,
+        "focus_suggestions_once": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1003,6 +1056,7 @@ def main() -> None:
                     st.session_state.batch_results = None
                     st.session_state.privacy_summary = analysis["privacy"]
                     st.session_state.resume_pdf_bytes = resume_pdf_bytes
+                    st.session_state.focus_suggestions_once = True
 
                     st.success("Single resume analysis complete.")
                 except Exception as exc:
@@ -1070,12 +1124,15 @@ def main() -> None:
         if not st.session_state.analysis_results:
             st.info("Upload resume + JD, then click Analyze to see AI suggestions.")
         else:
+            focus_suggestions = bool(st.session_state.get("focus_suggestions_once"))
             render_single_results(
                 st.session_state.analysis_results,
                 st.session_state.get("resume_pdf_bytes"),
                 st.session_state.get("jd_pdf_bytes"),
                 simple_mode=True,
+                focus_suggestions=focus_suggestions,
             )
+            st.session_state.focus_suggestions_once = False
 
         with st.expander("Input Preview", expanded=False):
             if st.session_state.use_sample:
@@ -1132,12 +1189,15 @@ def main() -> None:
                 if not st.session_state.analysis_results:
                     st.info("No analysis yet. Submit resume and JD to generate results.")
                 else:
+                    focus_suggestions = bool(st.session_state.get("focus_suggestions_once"))
                     render_single_results(
                         st.session_state.analysis_results,
                         st.session_state.get("resume_pdf_bytes"),
                         st.session_state.get("jd_pdf_bytes"),
                         simple_mode=False,
+                        focus_suggestions=focus_suggestions,
                     )
+                    st.session_state.focus_suggestions_once = False
                     privacy_summary = st.session_state.privacy_summary or {}
                     if privacy_summary:
                         st.markdown("#### Privacy Summary")
