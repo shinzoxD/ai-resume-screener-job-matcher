@@ -1017,7 +1017,6 @@ def render_single_results(
     resume_pdf_bytes: bytes | None,
     jd_pdf_bytes: bytes | None,
     simple_mode: bool = False,
-    focus_suggestions: bool = False,
 ) -> None:
     score = results["score_details"]
     skills = results["skill_details"]
@@ -1067,11 +1066,7 @@ def render_single_results(
         )
 
     if simple_mode:
-        tab_labels = (
-            ["Suggestions", "Summary", "Skills Gap"]
-            if focus_suggestions
-            else ["Summary", "Skills Gap", "Suggestions"]
-        )
+        tab_labels = ["Summary", "Skills Gap", "Suggestions"]
         tab_objs = st.tabs(tab_labels)
         tab_map = {name: tab for name, tab in zip(tab_labels, tab_objs)}
 
@@ -1405,7 +1400,6 @@ def main() -> None:
         "privacy_summary": {},
         "resume_pdf_bytes": None,
         "jd_pdf_bytes": None,
-        "focus_suggestions_once": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1603,7 +1597,6 @@ def main() -> None:
                     st.session_state.batch_results = None
                     st.session_state.privacy_summary = analysis["privacy"]
                     st.session_state.resume_pdf_bytes = resume_pdf_bytes
-                    st.session_state.focus_suggestions_once = True
 
                     st.success("Single resume analysis complete.")
                 except Exception as exc:
@@ -1671,15 +1664,12 @@ def main() -> None:
         if not st.session_state.analysis_results:
             st.info("Upload resume + JD, then click Analyze to see AI suggestions.")
         else:
-            focus_suggestions = bool(st.session_state.get("focus_suggestions_once"))
             render_single_results(
                 st.session_state.analysis_results,
                 st.session_state.get("resume_pdf_bytes"),
                 st.session_state.get("jd_pdf_bytes"),
                 simple_mode=True,
-                focus_suggestions=focus_suggestions,
             )
-            st.session_state.focus_suggestions_once = False
 
         with st.expander("Input Preview", expanded=False):
             if st.session_state.use_sample:
@@ -1736,15 +1726,12 @@ def main() -> None:
                 if not st.session_state.analysis_results:
                     st.info("No analysis yet. Submit resume and JD to generate results.")
                 else:
-                    focus_suggestions = bool(st.session_state.get("focus_suggestions_once"))
                     render_single_results(
                         st.session_state.analysis_results,
                         st.session_state.get("resume_pdf_bytes"),
                         st.session_state.get("jd_pdf_bytes"),
                         simple_mode=False,
-                        focus_suggestions=focus_suggestions,
                     )
-                    st.session_state.focus_suggestions_once = False
                     privacy_summary = st.session_state.privacy_summary or {}
                     if privacy_summary:
                         st.markdown("#### Privacy Summary")
