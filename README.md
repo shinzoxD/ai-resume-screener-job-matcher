@@ -1,4 +1,4 @@
-# AI Resume Screener & Job Matcher
+# ResumePilot AI
 
 Production-grade AI application for resume-to-job matching with explainability, ATS analytics, optional LLM coaching, batch ranking, API backend, evaluation harness, and CI-tested engineering workflows.
 

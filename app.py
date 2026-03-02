@@ -1,4 +1,4 @@
-"""AI Resume Screener & Job Matcher with advanced recruiter/candidate features."""
+"""ResumePilot AI with advanced recruiter/candidate features."""
 
 from __future__ import annotations
 
@@ -1659,7 +1659,7 @@ def render_batch_results(batch_rows: Sequence[Dict[str, Any]]) -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="AI Resume Screener & Job Matcher",
+        page_title="ResumePilot AI",
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -1681,7 +1681,7 @@ def main() -> None:
     st.markdown(
         """
         <div class="app-hero">
-            <h2 style="margin:0;">AI Resume Screener & Job Matcher</h2>
+            <h2 style="margin:0;">ResumePilot AI</h2>
             <p style="margin:0.35rem 0 0 0;">
                 Hybrid AI matching with role templates, section scoring, requirement evidence mapping, rewrite diff,
                 30-day action plans, tailored resume drafts, fairness checks, and multilingual support.
