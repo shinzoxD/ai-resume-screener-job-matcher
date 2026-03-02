@@ -315,15 +315,13 @@ def render_copy_suggestions_widget(suggestions: Sequence[str], *, key_suffix: st
               await navigator.clipboard.writeText(text);
               status.textContent = "Copied to clipboard.";
             }} catch (err) {{
-              status.textContent = "Clipboard blocked. Use the fallback text box below.";
+              status.textContent = "Clipboard blocked in this browser.";
             }}
           }});
         </script>
         """,
         height=62,
     )
-    with st.expander("Copy fallback (if browser blocks clipboard)", expanded=False):
-        st.text_area("Manual Copy", value=payload_text, height=120, key=f"copy_fallback_{key_suffix}")
 
 
 def render_next_steps_checklist(
