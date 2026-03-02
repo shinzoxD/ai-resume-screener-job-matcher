@@ -2339,12 +2339,19 @@ def main() -> None:
             action_label = "Analyze Resume Match" if analysis_mode == "Single Resume" else "Run Batch Screening"
     if not inputs_ready:
         st.caption("Complete required inputs to enable Analyze.")
-    run_clicked = st.button(action_label, type="primary", use_container_width=True, disabled=not inputs_ready)
+    run_clicked = st.button(action_label, type="primary", use_container_width=True)
 
-    if run_clicked and simple_mode and not groq_api_key.strip():
-        st.warning("No `GROQ_API_KEY` found. Running with rule-based suggestions for this analysis.")
+    if run_clicked and not inputs_ready:
+        if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
+            st.warning("Missing: Resume. Upload a resume PDF, then click Analyze.")
+        elif analysis_mode == "Single Resume":
+            st.warning("Missing: Resume or Job Description. Upload both inputs, then click Analyze.")
+        else:
+            st.warning("Missing: Resume files or Job Description. Upload all required inputs, then click Analyze.")
+    elif run_clicked:
+        if simple_mode and not groq_api_key.strip():
+            st.warning("No `GROQ_API_KEY` found. Running with rule-based suggestions for this analysis.")
 
-    if run_clicked:
         if analysis_mode == "Single Resume" and screening_mode == "Resume Health":
             if st.session_state.use_sample:
                 resume_text = SAMPLE_RESUME_TEXT
