@@ -105,7 +105,12 @@ Nice to Have:
 """.strip()
 
 MODEL_OPTIONS = ["all-MiniLM-L6-v2", "all-mpnet-base-v2"]
-LLM_MODEL_OPTIONS = ["llama-3.1-70b-versatile", "mixtral-8x7b-32768"]
+LLM_MODEL_OPTIONS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-70b-versatile",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768",
+]
 
 
 def inject_custom_css() -> None:
@@ -500,7 +505,13 @@ def render_single_results(
 
         with tabs[2]:
             st.markdown("#### Personalized Suggestions")
-            st.caption(f"Suggestion source: `{suggestions_payload.get('provider', 'unknown')}`")
+            provider = suggestions_payload.get("provider", "unknown")
+            st.caption(f"Suggestion source: `{provider}`")
+            if provider == "rule-based":
+                st.warning("LLM call failed for this run. Showing fallback suggestions.")
+                diagnostics = suggestions_payload.get("diagnostics", {})
+                with st.expander("LLM Diagnostics", expanded=False):
+                    st.json(diagnostics)
             for idx, suggestion in enumerate(suggestions or ["No suggestions generated in this mode."], start=1):
                 st.markdown(f"{idx}. {suggestion}")
 
@@ -856,12 +867,11 @@ def main() -> None:
                     jd_pasted = st.text_area("Paste Job Description", height=220)
 
             st.markdown("### LLM Suggestions")
-            groq_api_key_input = st.text_input("Groq API Key (Optional override)", value="", type="password")
-            groq_api_key = groq_api_key_input.strip() or secret_groq_key
+            groq_api_key = secret_groq_key
             if groq_api_key:
-                st.success("LLM suggestions enabled (Groq).")
+                st.success("LLM suggestions enabled from Space Secret.")
             else:
-                st.warning("Add `GROQ_API_KEY` in Space Secrets (or paste key above) to use AI suggestions.")
+                st.warning("Add `GROQ_API_KEY` in Space Secrets to use AI suggestions.")
         else:
             analysis_mode = st.radio("Mode", ["Single Resume", "Batch Screening"], index=0)
 

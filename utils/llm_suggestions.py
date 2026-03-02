@@ -1,4 +1,4 @@
-"""LLM-powered and fallback resume improvement suggestions."""
+﻿"""LLM-powered and fallback resume improvement suggestions."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def _parse_suggestion_lines(text: str, min_items: int = 3, max_items: int = 5) -
     if not text:
         return []
 
-    lines = []
+    lines: List[str] = []
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -69,9 +69,48 @@ def _parse_suggestion_lines(text: str, min_items: int = 3, max_items: int = 5) -
             deduped.append(line)
             seen.add(key)
 
+    # Some models return paragraph text instead of bullets.
+    if len(deduped) < min_items:
+        sentence_parts = re.split(r"(?<=[.!?])\s+", text.strip())
+        sentence_candidates: List[str] = []
+        for part in sentence_parts:
+            cleaned = re.sub(r"^[-*\u2022\d\.\)\(]+\s*", "", part.strip())
+            if len(cleaned) >= 18:
+                sentence_candidates.append(cleaned.rstrip(".") + ".")
+
+        seen_sentences = set()
+        deduped = []
+        for sentence in sentence_candidates:
+            key = sentence.lower()
+            if key not in seen_sentences:
+                deduped.append(sentence)
+                seen_sentences.add(key)
+
     if len(deduped) < min_items:
         return []
     return deduped[:max_items]
+
+
+def _resolve_candidate_models(client: Any, preferred_models: Sequence[str]) -> List[str]:
+    """Pick usable Groq models, preferring user-selected models first."""
+    deduped_pref: List[str] = []
+    seen = set()
+    for model in preferred_models:
+        m = (model or "").strip()
+        if m and m not in seen:
+            deduped_pref.append(m)
+            seen.add(m)
+
+    try:
+        models = client.models.list()
+        available = {getattr(m, "id", "") for m in getattr(models, "data", [])}
+        filtered = [m for m in deduped_pref if m in available]
+        if filtered:
+            return filtered
+    except Exception:
+        pass
+
+    return deduped_pref
 
 
 def generate_improvement_suggestions(
@@ -89,10 +128,12 @@ def generate_improvement_suggestions(
         "provider": "rule-based",
         "suggestions": fallback,
         "usage": {"prompt_tokens": 0, "completion_tokens": 0, "estimated_cost_usd": 0.0},
+        "diagnostics": {"reason": "", "attempted_models": [], "errors": []},
     }
 
     api_key = (groq_api_key or os.getenv("GROQ_API_KEY") or "").strip()
     if not api_key or Groq is None:
+        fallback_payload["diagnostics"]["reason"] = "no_api_key_or_groq_sdk"
         return fallback_payload
 
     prompt = f"""
@@ -116,38 +157,67 @@ Job Description:
 {jd_text[:5500]}
 """.strip()
 
+    errors: List[str] = []
+    attempted_models: List[str] = []
+
     try:
         client = Groq(api_key=api_key)
-        completion = client.chat.completions.create(
-            model=model_name,
-            temperature=0.3,
-            max_tokens=500,
-            messages=[
-                {"role": "system", "content": "You provide practical resume improvement advice."},
-                {"role": "user", "content": prompt},
+        candidate_models = _resolve_candidate_models(
+            client,
+            [
+                model_name,
+                "llama-3.3-70b-versatile",
+                "llama-3.1-70b-versatile",
+                "llama-3.1-8b-instant",
+                "mixtral-8x7b-32768",
             ],
         )
-        content = completion.choices[0].message.content or ""
-        suggestions = _parse_suggestion_lines(content, min_items=3, max_items=5)
 
-        prompt_tokens = int(getattr(completion.usage, "prompt_tokens", 0) or 0)
-        completion_tokens = int(getattr(completion.usage, "completion_tokens", 0) or 0)
-        # Approximate cost estimator for dashboarding and budget tracking.
-        estimated_cost_usd = ((prompt_tokens / 1_000_000) * 0.59) + ((completion_tokens / 1_000_000) * 0.79)
+        for candidate_model in candidate_models:
+            attempted_models.append(candidate_model)
+            try:
+                completion = client.chat.completions.create(
+                    model=candidate_model,
+                    temperature=0.3,
+                    max_tokens=500,
+                    messages=[
+                        {"role": "system", "content": "You provide practical resume improvement advice."},
+                        {"role": "user", "content": prompt},
+                    ],
+                )
+                content = completion.choices[0].message.content or ""
+                suggestions = _parse_suggestion_lines(content, min_items=3, max_items=5)
 
-        if suggestions:
-            return {
-                "provider": f"groq:{model_name}",
-                "suggestions": suggestions,
-                "usage": {
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "estimated_cost_usd": round(estimated_cost_usd, 6),
-                },
-            }
-    except Exception:
-        pass
+                prompt_tokens = int(getattr(completion.usage, "prompt_tokens", 0) or 0)
+                completion_tokens = int(getattr(completion.usage, "completion_tokens", 0) or 0)
+                estimated_cost_usd = ((prompt_tokens / 1_000_000) * 0.59) + ((completion_tokens / 1_000_000) * 0.79)
 
+                if suggestions:
+                    return {
+                        "provider": f"groq:{candidate_model}",
+                        "suggestions": suggestions,
+                        "usage": {
+                            "prompt_tokens": prompt_tokens,
+                            "completion_tokens": completion_tokens,
+                            "estimated_cost_usd": round(estimated_cost_usd, 6),
+                        },
+                        "diagnostics": {
+                            "reason": "",
+                            "attempted_models": attempted_models,
+                            "errors": errors,
+                        },
+                    }
+                errors.append(f"{candidate_model}: parsed_empty_output")
+            except Exception as exc:
+                errors.append(f"{candidate_model}: {type(exc).__name__}: {exc}")
+    except Exception as exc:
+        errors.append(f"client_init: {type(exc).__name__}: {exc}")
+
+    fallback_payload["diagnostics"] = {
+        "reason": "groq_request_failed",
+        "attempted_models": attempted_models,
+        "errors": errors[:4],
+    }
     return fallback_payload
 
 
