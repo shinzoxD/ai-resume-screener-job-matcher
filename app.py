@@ -308,6 +308,25 @@ def inject_custom_css() -> None:
                 font-size: 0.78rem;
                 font-weight: 600;
             }
+            .home-steps {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem 0.4rem;
+                margin-top: 0.2rem;
+            }
+            .home-step-num {
+                width: 1.2rem;
+                height: 1.2rem;
+                border-radius: 999px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.72rem;
+                font-weight: 800;
+                color: #dff4ff;
+                background: rgba(45, 212, 191, 0.2);
+                border: 1px solid rgba(45, 212, 191, 0.45);
+            }
             .home-ready.good {
                 border: 1px solid rgba(52,211,153,0.35);
                 border-radius: 10px;
@@ -1904,18 +1923,25 @@ def main() -> None:
                 redact_enabled = st.checkbox("Redact PII Before Analysis", value=False)
 
     if simple_mode:
+        home_title = "Start Your JD Match" if screening_mode == "JD Match" else "Start Your Resume Health Check"
+        home_sub = (
+            "Upload resume + target JD to get fit score, skills gap, and AI suggestions."
+            if screening_mode == "JD Match"
+            else "Upload your resume only to get quality score, ATS health, and concrete fixes."
+        )
+        step_2 = "Add Job Description" if screening_mode == "JD Match" else "Run Health Audit"
+        step_3 = "Analyze Match and Fixes" if screening_mode == "JD Match" else "Get Score and Fixes"
+
         st.markdown(
             f"""
             <div class="home-shell">
-                <div class="home-title">Start Your {"JD Match" if screening_mode == "JD Match" else "Resume Health Check"}</div>
-                <div class="home-sub">{
-                    "Upload resume + target JD to get fit score, skills gap, and AI suggestions."
-                    if screening_mode == "JD Match"
-                    else "Upload your resume only to get quality score, ATS health, and concrete fixes."
-                }</div>
-                <span class="home-step">1 Upload Resume</span>
-                <span class="home-step">{'2 Add Job Description' if screening_mode == "JD Match" else '2 Run Resume Health Audit'}</span>
-                <span class="home-step">3 Analyze and Improve</span>
+                <div class="home-title">{home_title}</div>
+                <div class="home-sub">{home_sub}</div>
+                <div class="home-steps">
+                    <span class="home-step"><span class="home-step-num">1</span><span>Upload Resume</span></span>
+                    <span class="home-step"><span class="home-step-num">2</span><span>{step_2}</span></span>
+                    <span class="home-step"><span class="home-step-num">3</span><span>{step_3}</span></span>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
