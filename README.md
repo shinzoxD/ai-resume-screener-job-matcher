@@ -83,13 +83,13 @@ flowchart TD
 No demo video included (as requested). Static UI snapshots are included below.
 
 ### Home and Mode Selection
-![Home](assets/screenshots/01-home-mode-selection.svg)
+![Home](assets/screenshots/01-home-mode-selection.png)
 
 ### JD Match Report
-![JD Match](assets/screenshots/02-jd-match-report.svg)
+![JD Match](assets/screenshots/02-jd-match-report.png)
 
 ### Resume Health Report
-![Resume Health](assets/screenshots/03-resume-health-report.svg)
+![Resume Health](assets/screenshots/03-resume-health-report.png)
 
 ## Project Structure
 ```text
@@ -110,7 +110,8 @@ No demo video included (as requested). Static UI snapshots are included below.
 |   |-- app_history.db
 |   `-- eval_pairs.jsonl
 |-- scripts/
-|   `-- evaluate.py
+|   |-- evaluate.py
+|   `-- capture_screenshots.py
 |-- tests/
 |   |-- conftest.py
 |   |-- test_api.py
