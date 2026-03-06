@@ -1983,7 +1983,7 @@ def main() -> None:
     secret_groq_key = safe_get_secret("GROQ_API_KEY")
     groq_api_key = secret_groq_key
     simple_mode = True
-    screening_mode = "JD Match"
+    screening_mode = "Resume Health"
     role_hint = ""
 
     with st.sidebar:
@@ -1993,7 +1993,7 @@ def main() -> None:
         if simple_mode:
             analysis_mode = "Single Resume"
             role_template_name = "General"
-            screening_mode = st.radio("Screening Mode", ["JD Match", "Resume Health"], index=0)
+            screening_mode = st.radio("Screening Mode", ["JD Match", "Resume Health"], index=1)
             st.caption("Simple mode keeps only core controls.")
 
             source_options = ["Live Upload/Paste", "Use Built-in Sample"]
@@ -2011,7 +2011,7 @@ def main() -> None:
         else:
             analysis_mode = st.radio("Mode", ["Single Resume", "Batch Screening"], index=0)
             if analysis_mode == "Single Resume":
-                screening_mode = st.radio("Screening Mode", ["JD Match", "Resume Health"], index=0)
+                screening_mode = st.radio("Screening Mode", ["JD Match", "Resume Health"], index=1)
             else:
                 screening_mode = "JD Match"
                 st.caption("Batch Screening currently runs JD Match mode.")
