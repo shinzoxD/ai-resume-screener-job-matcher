@@ -2001,13 +2001,6 @@ def main() -> None:
             input_source = st.radio("Input Source", source_options, index=source_index)
             st.session_state.use_sample = input_source == "Use Built-in Sample"
             st.caption("Inputs are on the main screen below.")
-
-            st.markdown("### LLM Suggestions")
-            groq_api_key = secret_groq_key
-            if groq_api_key:
-                st.success("LLM suggestions enabled from Space Secret.")
-            else:
-                st.warning("Add `GROQ_API_KEY` in Space Secrets to use AI suggestions.")
         else:
             analysis_mode = st.radio("Mode", ["Single Resume", "Batch Screening"], index=0)
             if analysis_mode == "Single Resume":
@@ -2031,14 +2024,6 @@ def main() -> None:
                 else:
                     st.info("Sample mode is ON. Built-in resume and JD will be used.")
                 st.caption("Switch Input Source to `Live Upload/Paste` to use your own files.")
-
-            with st.expander("LLM Suggestions", expanded=True):
-                llm_mode = st.radio("Suggestion Engine", ["Auto (Groq if key)", "Rule-based only"], index=0)
-                llm_model_name = st.selectbox("Groq Model", LLM_MODEL_OPTIONS, index=0)
-                groq_api_key_input = st.text_input("Groq API Key (Optional)", value="", type="password")
-                groq_api_key = groq_api_key_input.strip() or secret_groq_key
-                if llm_mode == "Rule-based only":
-                    groq_api_key = ""
 
             with st.expander("Advanced Settings", expanded=False):
                 base_model_name = st.selectbox("Embedding Model", MODEL_OPTIONS, index=0)
